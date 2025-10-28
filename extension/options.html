@@ -1,0 +1,83 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <title>Chrome Issue Reporter Options</title>
+    <style>
+      body {
+        font-family: Arial, sans-serif;
+        margin: 24px;
+        max-width: 720px;
+      }
+      h1 {
+        font-size: 1.8rem;
+      }
+      label {
+        display: block;
+        margin-top: 16px;
+        font-weight: bold;
+      }
+      input,
+      textarea {
+        width: 100%;
+        padding: 8px;
+        margin-top: 4px;
+        box-sizing: border-box;
+      }
+      button {
+        margin-top: 16px;
+        padding: 10px 16px;
+      }
+      .actions {
+        display: flex;
+        gap: 8px;
+        flex-wrap: wrap;
+      }
+      .status {
+        margin-top: 16px;
+        min-height: 1.2em;
+      }
+      .hint {
+        color: #555;
+        font-size: 0.9rem;
+      }
+    </style>
+  </head>
+  <body>
+    <h1>Chrome Issue Reporter Settings</h1>
+    <p class="hint">
+      Configure the default repository that will receive issues created from the extension.
+    </p>
+    <form id="config-form">
+      <label for="owner">Repository owner</label>
+      <input id="owner" name="owner" type="text" required placeholder="e.g. octocat" />
+
+      <label for="repo">Repository name</label>
+      <input id="repo" name="repo" type="text" required placeholder="e.g. hello-world" />
+
+      <label for="labels">Default labels</label>
+      <input
+        id="labels"
+        name="labels"
+        type="text"
+        placeholder="Comma-separated labels"
+      />
+
+      <div class="actions">
+        <button id="save" type="submit">Save defaults</button>
+        <button id="sign-in" type="button">Sign in with GitHub</button>
+        <button id="sign-out" type="button">Sign out</button>
+        <a
+          id="token-settings"
+          href="https://github.com/settings/tokens"
+          target="_blank"
+          rel="noreferrer"
+        >
+          Manage tokens
+        </a>
+      </div>
+    </form>
+    <div class="status" id="status"></div>
+    <script src="options.js" type="module"></script>
+  </body>
+</html>
