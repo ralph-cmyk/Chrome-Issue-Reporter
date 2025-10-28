@@ -2,9 +2,10 @@ async function init() {
   await loadConfig();
   await refreshAuthState();
 
-  document.getElementById('config-form').addEventListener('submit', handleSave);
+  document.getElementById('save').addEventListener('click', handleSave);
   document.getElementById('sign-in').addEventListener('click', handleSignIn);
   document.getElementById('sign-out').addEventListener('click', handleSignOut);
+  document.getElementById('repo-url').addEventListener('input', handleRepoUrlChange);
 }
 
 document.addEventListener('DOMContentLoaded', init);
@@ -24,8 +25,7 @@ async function loadConfig() {
   }
 }
 
-async function handleSave(event) {
-  event.preventDefault();
+async function handleSave() {
   const owner = document.getElementById('owner').value.trim();
   const repo = document.getElementById('repo').value.trim();
   const labels = document
@@ -34,52 +34,111 @@ async function handleSave(event) {
     .map((label) => label.trim())
     .filter(Boolean);
 
+  if (!owner || !repo) {
+    setStatus('⚠️ Repository owner and name are required.');
+    return;
+  }
+
   const response = await chrome.runtime.sendMessage({
     type: 'saveConfig',
     config: { owner, repo, labels }
   });
 
-  const status = document.getElementById('status');
   if (response?.success) {
-    status.textContent = 'Defaults saved.';
+    setStatus('✅ Repository settings saved.');
   } else {
-    status.textContent = response?.error || 'Unable to save settings.';
+    setStatus('❌ ' + (response?.error || 'Unable to save settings.'));
   }
 }
 
 async function handleSignIn() {
-  setStatus('Signing in…');
-  const response = await chrome.runtime.sendMessage({ type: 'signIn' });
+  const tokenInput = document.getElementById('token');
+  const token = tokenInput.value.trim();
+  
+  if (!token) {
+    setStatus('⚠️ Please enter a Personal Access Token.');
+    return;
+  }
+
+  setStatus('🔄 Validating token...');
+  const response = await chrome.runtime.sendMessage({ 
+    type: 'signIn',
+    token: token 
+  });
+  
   if (response?.success) {
-    setStatus('Signed in successfully.');
+    setStatus('✅ Token validated and saved successfully!');
+    tokenInput.value = '';
   } else {
-    setStatus(response?.error || 'Sign-in failed.');
+    setStatus('❌ ' + (response?.error || 'Sign-in failed.'));
   }
   await refreshAuthState();
 }
 
 async function handleSignOut() {
   await chrome.runtime.sendMessage({ type: 'signOut' });
-  setStatus('Signed out.');
+  setStatus('✅ Signed out successfully.');
   await refreshAuthState();
 }
 
 async function refreshAuthState() {
   const signIn = document.getElementById('sign-in');
   const signOut = document.getElementById('sign-out');
-  const status = document.getElementById('status');
+  const tokenInput = document.getElementById('token');
 
   const response = await chrome.runtime.sendMessage({ type: 'getAuthState' });
   if (response?.success && response.authenticated) {
-    signIn.disabled = true;
+    signIn.textContent = 'Update Token';
     signOut.disabled = false;
-    const scope = response.token?.scope || 'N/A';
-    status.textContent = `Signed in (scope: ${scope}).`;
+    tokenInput.placeholder = 'Enter new token to update...';
   } else {
-    signIn.disabled = false;
+    signIn.textContent = 'Save & Validate Token';
     signOut.disabled = true;
-    status.textContent = 'Not signed in.';
+    tokenInput.placeholder = 'ghp_xxxxxxxxxxxxxxxxxxxx or github_pat_xxxxxxxxxxxxxxxxxxxx';
   }
+}
+
+function handleRepoUrlChange() {
+  const repoUrl = document.getElementById('repo-url').value.trim();
+  const parsed = parseGitHubUrl(repoUrl);
+  
+  if (parsed) {
+    document.getElementById('owner').value = parsed.owner;
+    document.getElementById('repo').value = parsed.repo;
+  }
+}
+
+function parseGitHubUrl(url) {
+  if (!url) return null;
+  
+  // Remove trailing slashes and whitespace
+  url = url.trim().replace(/\/+$/, '');
+  
+  // Pattern 1: owner/repo
+  let match = url.match(/^([^\/\s]+)\/([^\/\s]+)$/);
+  if (match) {
+    return { owner: match[1], repo: match[2] };
+  }
+  
+  // Pattern 2: https://github.com/owner/repo or http://github.com/owner/repo
+  match = url.match(/^https?:\/\/github\.com\/([^\/\s]+)\/([^\/\s]+)/);
+  if (match) {
+    return { owner: match[1], repo: match[2] };
+  }
+  
+  // Pattern 3: github.com/owner/repo
+  match = url.match(/^github\.com\/([^\/\s]+)\/([^\/\s]+)/);
+  if (match) {
+    return { owner: match[1], repo: match[2] };
+  }
+  
+  // Pattern 4: git@github.com:owner/repo.git
+  match = url.match(/^git@github\.com:([^\/\s]+)\/([^\/\s]+?)(?:\.git)?$/);
+  if (match) {
+    return { owner: match[1], repo: match[2] };
+  }
+  
+  return null;
 }
 
 function setStatus(message) {
