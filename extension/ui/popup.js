@@ -11,6 +11,8 @@ const signInButton = document.getElementById('sign-in');
 const signOutButton = document.getElementById('sign-out');
 const clearContextButton = document.getElementById('clear-context');
 const openOptionsLink = document.getElementById('open-options');
+const scopeSelect = document.getElementById('scope');
+const scopeHintEl = document.getElementById('scope-hint');
 
 init();
 
@@ -23,11 +25,20 @@ function init() {
     event.preventDefault();
     chrome.runtime.openOptionsPage();
   });
+  if (scopeSelect) {
+    scopeSelect.addEventListener('change', handleScopeChange);
+  }
   refresh();
 }
 
 async function refresh() {
-  await Promise.all([refreshAuthState(), loadConfig(), loadContext(), loadLastIssue()]);
+  await Promise.all([
+    refreshAuthState(),
+    loadConfig(),
+    loadContext(),
+    loadLastIssue(),
+    loadAuthPreferences()
+  ]);
 }
 
 async function refreshAuthState(preserveMessage = false) {
@@ -80,6 +91,26 @@ async function loadLastIssue() {
   }
 }
 
+async function loadAuthPreferences() {
+  const response = await chrome.runtime.sendMessage({ type: 'getAuthPreferences' });
+  if (!scopeSelect) {
+    updateScopeHint();
+    return;
+  }
+  let scopeValue =
+    response?.success && response.preferences?.scope
+      ? response.preferences.scope
+      : response?.defaultScope || 'public_repo';
+  const hasOption = Array.from(scopeSelect.options || []).some(
+    (option) => option.value === scopeValue
+  );
+  if (!hasOption) {
+    scopeValue = scopeSelect.options?.[0]?.value || 'public_repo';
+  }
+  scopeSelect.value = scopeValue;
+  updateScopeHint();
+}
+
 async function handleSubmit(event) {
   event.preventDefault();
   const title = titleInput.value.trim();
@@ -119,7 +150,10 @@ async function handleSignIn() {
   setStatus('Signing in…');
   let response;
   try {
-    response = await chrome.runtime.sendMessage({ type: 'signIn' });
+    response = await chrome.runtime.sendMessage({
+      type: 'signIn',
+      scope: scopeSelect?.value
+    });
     if (!response?.success) {
       setStatus(response?.error || 'Sign-in failed.');
     }
@@ -129,6 +163,18 @@ async function handleSignIn() {
     return;
   }
   await refreshAuthState(!(response?.success));
+}
+
+async function handleScopeChange() {
+  updateScopeHint();
+  const scope = scopeSelect?.value;
+  if (!scope) {
+    return;
+  }
+  await chrome.runtime.sendMessage({
+    type: 'saveAuthPreferences',
+    preferences: { scope }
+  });
 }
 
 async function handleSignOut() {
@@ -222,4 +268,18 @@ function setStatus(message) {
 function setLoading(isLoading) {
   createButton.disabled = isLoading;
   createButton.textContent = isLoading ? 'Creating…' : 'Create issue';
+}
+
+function updateScopeHint() {
+  if (!scopeHintEl || !scopeSelect) {
+    return;
+  }
+  const scope = scopeSelect.value;
+  if (scope === 'repo') {
+    scopeHintEl.textContent =
+      'Requests private repository access (repo scope).';
+  } else {
+    scopeHintEl.textContent =
+      'Requests access to public repositories only (public_repo scope).';
+  }
 }
