@@ -1,0 +1,114 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <title>Chrome Issue Reporter</title>
+    <style>
+      body {
+        font-family: Arial, sans-serif;
+        width: 360px;
+        margin: 0;
+        padding: 16px;
+        box-sizing: border-box;
+      }
+      h1 {
+        font-size: 1.2rem;
+        margin-top: 0;
+      }
+      label {
+        display: block;
+        font-weight: bold;
+        margin-top: 12px;
+      }
+      input,
+      textarea {
+        width: 100%;
+        margin-top: 4px;
+        padding: 8px;
+        box-sizing: border-box;
+      }
+      textarea {
+        min-height: 140px;
+        resize: vertical;
+      }
+      button,
+      select {
+        margin-top: 12px;
+        padding: 8px 12px;
+      }
+      select {
+        width: 100%;
+      }
+      .status {
+        margin-top: 12px;
+        min-height: 1.2em;
+      }
+      .footer {
+        margin-top: 12px;
+        font-size: 0.9rem;
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+      }
+      .link {
+        color: #1a73e8;
+        text-decoration: none;
+      }
+      .link:hover {
+        text-decoration: underline;
+      }
+      .context-preview {
+        margin-top: 12px;
+        font-size: 0.85rem;
+        white-space: pre-wrap;
+        background: #f5f5f5;
+        padding: 8px;
+        border-radius: 4px;
+        max-height: 140px;
+        overflow: auto;
+      }
+      .hint {
+        font-size: 0.8rem;
+        color: #555;
+        margin-top: 4px;
+      }
+      .auth-actions {
+        display: flex;
+        gap: 8px;
+        flex-wrap: wrap;
+        margin-top: 12px;
+      }
+    </style>
+  </head>
+  <body>
+    <h1>Create GitHub Issue</h1>
+    <div class="auth-actions">
+      <button id="sign-in" type="button">Sign in</button>
+      <button id="sign-out" type="button">Sign out</button>
+      <a class="link" id="open-options" href="#">Settings</a>
+    </div>
+    <form id="issue-form">
+      <label for="title">Title</label>
+      <input id="title" type="text" required />
+
+      <label for="body">Body</label>
+      <textarea id="body"></textarea>
+
+      <label for="scope">GitHub access</label>
+      <select id="scope">
+        <option value="public_repo">Public repositories only</option>
+        <option value="repo">Public and private repositories</option>
+      </select>
+      <p class="hint" id="scope-hint"></p>
+
+      <button id="create" type="submit">Create issue</button>
+    </form>
+    <div class="status" id="status"></div>
+    <div class="context-preview" id="context-preview"></div>
+    <div class="footer">
+      <span id="last-issue"></span>
+      <button id="clear-context" type="button">Clear</button>
+    </div>
+    <script src="popup.js" type="module"></script>
+  </body>
+</html>
