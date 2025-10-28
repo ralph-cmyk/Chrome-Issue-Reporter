@@ -5,45 +5,74 @@ issues without leaving the browser. The extension uses the PKCE OAuth flow with
 `chrome.identity.launchWebAuthFlow`, stores tokens securely in `chrome.storage.sync`, and submits
 issues via the GitHub REST API.
 
-## Project structure
+## 🚀 Quick Installation
+
+**Want to install this extension? It's easy!**
+
+1. **Download:** Get the latest `chrome-issue-reporter.zip` from [Releases](https://github.com/ralph-cmyk/Chrome-Issue-Reporter/releases) or [build it yourself](#building-from-source)
+2. **Extract:** Unzip to a permanent location on your computer
+3. **Install:** Open `chrome://extensions/`, enable Developer mode, click "Load unpacked", and select the extracted folder
+
+📖 **For detailed step-by-step instructions, see [INSTALL.md](INSTALL.md)**  
+⚡ **For a quick 7-minute setup guide, see [QUICKSTART.md](QUICKSTART.md)**
+
+## How It Works
+
+1. Right-click on any page and select **"Create GitHub Issue from Page/Selection"**
+2. The extension captures:
+   - Current URL
+   - Selected text (if any)
+   - Surrounding HTML context
+   - Recent JavaScript errors
+   - Nearby script content
+3. Review and edit the captured context in the popup
+4. Submit directly to GitHub - the issue is created instantly
+5. Get a link to your newly created issue
+
+## Project Structure
 
 ```
-extension/
-  manifest.json
-  background.js
-  content.js
-  options.html
-  options.js
-  pkce.js
-  ui/
-    popup.html
-    popup.js
+Chrome-Issue-Reporter/
+├── extension/              # Extension source files
+│   ├── manifest.json      # Extension manifest (V3)
+│   ├── background.js      # Service worker, OAuth, GitHub API
+│   ├── content.js         # Page context capture
+│   ├── pkce.js            # PKCE OAuth implementation
+│   ├── options.html       # Extension options page
+│   ├── options.js         # Options page logic
+│   └── ui/
+│       ├── popup.html     # Extension popup UI
+│       └── popup.js       # Popup logic and issue submission
+├── .github/
+│   └── workflows/
+│       └── release.yml    # Automated release workflow
+├── INSTALL.md             # Detailed installation guide
+├── README.md              # This file
+└── package.json           # Build scripts and metadata
 ```
 
-## Prerequisites
+## Configuration
 
-1. Create a GitHub OAuth App (or configure an existing one) and note the **Client ID**.
-2. Decide which repository should receive issues and which default labels you want to apply.
+After installation, you need to configure the extension:
 
-> **Important:** This project never ships a client secret. The OAuth flow uses PKCE and the
-> browser-managed redirect URL.
+1. **Create a GitHub OAuth App:**
+   - Go to [GitHub Settings → Developer settings → OAuth Apps](https://github.com/settings/developers)
+   - Create a new OAuth App with callback URL: `https://<YOUR_EXTENSION_ID>.chromiumapp.org/`
+   - Note your Client ID
 
-## Configure the extension
+2. **Update the extension:**
+   - Open `background.js` in your installed extension folder
+   - Update `CLIENT_ID`, `REDIRECT_URI`, and default repository settings
+   - Reload the extension in `chrome://extensions/`
 
-1. Open `extension/background.js` and update the placeholder constants:
-   - `CLIENT_ID` – your GitHub OAuth App client ID.
-   - `REDIRECT_URI` – `https://<EXTENSION_ID>.chromiumapp.org/`.
-   - `GITHUB_SCOPES` – either `public_repo` or `repo` depending on whether the target repository is
-     public or private.
-   - `DEFAULT_OWNER`, `DEFAULT_REPO`, and `DEFAULT_LABELS` – repository defaults used when creating
-     issues.
-2. Load the unpacked extension in Chrome:
-   - Navigate to `chrome://extensions`.
-   - Enable **Developer mode**.
-   - Click **Load unpacked** and select the `extension` directory from this project.
-3. After the first load, Chrome assigns an extension ID. Update the `REDIRECT_URI` constant so that
-   the hostname matches the assigned ID (e.g. `https://abcdefghijklmnop.chromiumapp.org/`).
-4. Optionally adjust UI strings or defaults in `extension/options.html` and `extension/ui/popup.html`.
+3. **Sign in:**
+   - Click the extension icon and sign in with GitHub
+   - Grant the necessary permissions
+
+📖 **See [INSTALL.md](INSTALL.md) for complete configuration instructions**
+
+> **Important:** This extension never ships a client secret. The OAuth flow uses PKCE and the
+> browser-managed redirect URL for security.
 
 ## Using the extension
 
@@ -72,12 +101,47 @@ Captured page context (URL, selection, snippets, and last error message) is stor
 submit or clear it. OAuth tokens are only stored inside Chrome’s managed storage. No data is sent to
 third-party services other than GitHub APIs during authentication and issue creation.
 
-## Packaging the extension
+## Building from Source
 
-1. Update any placeholder constants and verify that the popup/options flows work as expected.
-2. From `chrome://extensions`, choose **Pack extension** and point Chrome at the `extension`
-   directory.
-3. Distribute the generated `.crx` and `.pem` files according to your deployment needs.
+Want to build the extension yourself or contribute? Here's how:
+
+### Quick Build
+```bash
+# Clone the repository
+git clone https://github.com/ralph-cmyk/Chrome-Issue-Reporter.git
+cd Chrome-Issue-Reporter
+
+# Build and package
+npm run package
+```
+
+This creates `chrome-issue-reporter.zip` ready for distribution or installation.
+
+### Available Scripts
+- `npm run clean` - Remove build artifacts
+- `npm run build` - Build extension to `dist/` folder
+- `npm run package` - Build and create ZIP file
+
+### Manual Build
+If you don't have Node.js:
+```bash
+cd extension
+zip -r ../chrome-issue-reporter.zip *
+```
+
+## For Developers
+
+### Development Installation
+1. Clone this repository
+2. Open `chrome://extensions/` in Chrome
+3. Enable Developer mode
+4. Click "Load unpacked" and select the `extension/` directory
+
+### Testing Changes
+After making changes:
+1. Save your files
+2. Click the Reload button for the extension in `chrome://extensions/`
+3. Test your changes
 
 ## Troubleshooting
 
