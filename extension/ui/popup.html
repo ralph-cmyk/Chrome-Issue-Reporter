@@ -31,13 +31,9 @@
         min-height: 140px;
         resize: vertical;
       }
-      button,
-      select {
+      button {
         margin-top: 12px;
         padding: 8px 12px;
-      }
-      select {
-        width: 100%;
       }
       .status {
         margin-top: 12px;
@@ -72,21 +68,34 @@
         color: #555;
         margin-top: 4px;
       }
-      .auth-actions {
+      .info-bar {
         display: flex;
-        gap: 8px;
-        flex-wrap: wrap;
-        margin-top: 12px;
+        justify-content: space-between;
+        align-items: center;
+        background: #f5f5f5;
+        padding: 8px;
+        border-radius: 4px;
+        margin-bottom: 12px;
+        font-size: 0.85rem;
+      }
+      .info-item {
+        display: flex;
+        flex-direction: column;
+        gap: 2px;
       }
     </style>
   </head>
   <body>
     <h1>Create GitHub Issue</h1>
-    <div class="auth-actions">
-      <button id="sign-in" type="button">Sign in</button>
-      <button id="sign-out" type="button">Sign out</button>
-      <a class="link" id="open-options" href="#">Settings</a>
+    
+    <div class="info-bar">
+      <div class="info-item">
+        <span id="auth-status">⚠️ Not authenticated</span>
+        <span id="repo-status">⚠️ Repository not configured</span>
+      </div>
+      <a class="link" id="open-options" href="#">⚙️ Settings</a>
     </div>
+
     <form id="issue-form">
       <label for="title">Title</label>
       <input id="title" type="text" required />
@@ -94,21 +103,17 @@
       <label for="body">Body</label>
       <textarea id="body"></textarea>
 
-      <label for="scope">GitHub access</label>
-      <select id="scope">
-        <option value="public_repo">Public repositories only</option>
-        <option value="repo">Public and private repositories</option>
-      </select>
-      <p class="hint" id="scope-hint"></p>
-
       <button id="create" type="submit">Create issue</button>
     </form>
+    
     <div class="status" id="status"></div>
     <div class="context-preview" id="context-preview"></div>
+    
     <div class="footer">
       <span id="last-issue"></span>
       <button id="clear-context" type="button">Clear</button>
     </div>
+    
     <script src="popup.js" type="module"></script>
   </body>
 </html>

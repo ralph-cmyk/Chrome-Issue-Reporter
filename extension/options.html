@@ -12,6 +12,11 @@
       h1 {
         font-size: 1.8rem;
       }
+      h2 {
+        font-size: 1.3rem;
+        margin-top: 24px;
+        margin-bottom: 12px;
+      }
       label {
         display: block;
         margin-top: 16px;
@@ -40,43 +45,98 @@
       .hint {
         color: #555;
         font-size: 0.9rem;
+        margin-top: 4px;
+      }
+      .section {
+        margin-top: 24px;
+        padding: 16px;
+        background: #f5f5f5;
+        border-radius: 4px;
+      }
+      .info-box {
+        background: #e3f2fd;
+        border-left: 4px solid #2196f3;
+        padding: 12px;
+        margin-top: 16px;
+        margin-bottom: 16px;
+      }
+      .link {
+        color: #1a73e8;
+        text-decoration: none;
+      }
+      .link:hover {
+        text-decoration: underline;
       }
     </style>
   </head>
   <body>
     <h1>Chrome Issue Reporter Settings</h1>
-    <p class="hint">
-      Configure the default repository that will receive issues created from the extension.
-    </p>
-    <form id="config-form">
+    
+    <div class="info-box">
+      <strong>🔑 New Authentication Method:</strong> This extension now uses GitHub Personal Access Tokens (PAT) 
+      for a simpler, more secure setup. No OAuth app configuration needed!
+    </div>
+
+    <div class="section">
+      <h2>1. GitHub Authentication</h2>
+      <p class="hint">
+        Create a Personal Access Token at 
+        <a class="link" href="https://github.com/settings/tokens/new" target="_blank" rel="noreferrer">
+          github.com/settings/tokens/new
+        </a>
+        <br>
+        Required scopes: <strong>repo</strong> (for private repos) or <strong>public_repo</strong> (for public repos only)
+      </p>
+      
+      <label for="token">Personal Access Token</label>
+      <input 
+        id="token" 
+        name="token" 
+        type="password" 
+        placeholder="ghp_xxxxxxxxxxxxxxxxxxxx or github_pat_xxxxxxxxxxxxxxxxxxxx" 
+      />
+      <p class="hint">Your token is stored securely in Chrome's sync storage and never shared.</p>
+      
+      <div class="actions">
+        <button id="sign-in" type="button">Save & Validate Token</button>
+        <button id="sign-out" type="button">Sign out (Clear Token)</button>
+      </div>
+    </div>
+
+    <div class="section">
+      <h2>2. Default Repository</h2>
+      <p class="hint">
+        Specify the default GitHub repository where issues will be created.
+      </p>
+      
+      <label for="repo-url">Repository URL (or enter owner/repo below)</label>
+      <input 
+        id="repo-url" 
+        name="repo-url" 
+        type="text" 
+        placeholder="https://github.com/owner/repo or owner/repo" 
+      />
+      <p class="hint">
+        Supported formats: https://github.com/owner/repo, github.com/owner/repo, owner/repo
+      </p>
+
       <label for="owner">Repository owner</label>
-      <input id="owner" name="owner" type="text" required placeholder="e.g. octocat" />
+      <input id="owner" name="owner" type="text" placeholder="e.g. octocat" />
 
       <label for="repo">Repository name</label>
-      <input id="repo" name="repo" type="text" required placeholder="e.g. hello-world" />
+      <input id="repo" name="repo" type="text" placeholder="e.g. hello-world" />
 
       <label for="labels">Default labels</label>
       <input
         id="labels"
         name="labels"
         type="text"
-        placeholder="Comma-separated labels"
+        placeholder="Comma-separated labels (e.g. bug, help wanted)"
       />
 
-      <div class="actions">
-        <button id="save" type="submit">Save defaults</button>
-        <button id="sign-in" type="button">Sign in with GitHub</button>
-        <button id="sign-out" type="button">Sign out</button>
-        <a
-          id="token-settings"
-          href="https://github.com/settings/tokens"
-          target="_blank"
-          rel="noreferrer"
-        >
-          Manage tokens
-        </a>
-      </div>
-    </form>
+      <button id="save" type="button">Save Repository Settings</button>
+    </div>
+
     <div class="status" id="status"></div>
     <script src="options.js" type="module"></script>
   </body>
