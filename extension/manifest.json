@@ -1,0 +1,32 @@
+{
+  "manifest_version": 3,
+  "name": "Chrome Issue Reporter",
+  "description": "Capture the current page context and file GitHub issues without leaving Chrome.",
+  "version": "0.1.0",
+  "action": {
+    "default_popup": "ui/popup.html",
+    "default_title": "Create GitHub Issue"
+  },
+  "background": {
+    "service_worker": "background.js",
+    "type": "module"
+  },
+  "options_page": "options.html",
+  "permissions": [
+    "identity",
+    "contextMenus",
+    "activeTab",
+    "scripting",
+    "storage"
+  ],
+  "host_permissions": [
+    "https://api.github.com/*"
+  ],
+  "content_scripts": [
+    {
+      "matches": ["<all_urls>"],
+      "js": ["content.js"],
+      "run_at": "document_idle"
+    }
+  ]
+}
