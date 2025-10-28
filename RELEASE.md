@@ -40,7 +40,7 @@ Use this checklist when creating a new release of Chrome Issue Reporter.
    ```
 
 2. **Create a GitHub Release:**
-   - Go to: https://github.com/ralph-cmyk/Chrome-Issue-Reporter/releases/new
+   - Go to your repository's releases page: `https://github.com/YOUR_USERNAME/YOUR_REPO/releases/new`
    - Create a new tag (e.g., `v0.1.0`)
    - Fill in release title and notes
    - Upload `chrome-issue-reporter.zip`
@@ -68,10 +68,10 @@ Use this checklist when creating a new release of Chrome Issue Reporter.
 2. Extract to a permanent location
 3. Load in Chrome via chrome://extensions/
 
-See [INSTALL.md](https://github.com/ralph-cmyk/Chrome-Issue-Reporter/blob/main/INSTALL.md) for detailed instructions.
+See [INSTALL.md](INSTALL.md) for detailed instructions.
 
 ### Configuration
-This release requires GitHub OAuth setup. See [QUICKSTART.md](https://github.com/ralph-cmyk/Chrome-Issue-Reporter/blob/main/QUICKSTART.md) for the 7-minute setup guide.
+This release requires GitHub OAuth setup. See [QUICKSTART.md](QUICKSTART.md) for the 7-minute setup guide.
 ```
 
 ## Versioning
