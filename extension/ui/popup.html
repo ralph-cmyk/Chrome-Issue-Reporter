@@ -31,9 +31,13 @@
         min-height: 140px;
         resize: vertical;
       }
-      button {
+      button,
+      select {
         margin-top: 12px;
         padding: 8px 12px;
+      }
+      select {
+        width: 100%;
       }
       .status {
         margin-top: 12px;
@@ -63,6 +67,11 @@
         max-height: 140px;
         overflow: auto;
       }
+      .hint {
+        font-size: 0.8rem;
+        color: #555;
+        margin-top: 4px;
+      }
       .auth-actions {
         display: flex;
         gap: 8px;
@@ -84,6 +93,13 @@
 
       <label for="body">Body</label>
       <textarea id="body"></textarea>
+
+      <label for="scope">GitHub access</label>
+      <select id="scope">
+        <option value="public_repo">Public repositories only</option>
+        <option value="repo">Public and private repositories</option>
+      </select>
+      <p class="hint" id="scope-hint"></p>
 
       <button id="create" type="submit">Create issue</button>
     </form>

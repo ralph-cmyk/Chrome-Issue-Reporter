@@ -11,6 +11,8 @@ const TOKEN_KEY = 'github_token';
 const CONFIG_KEY = 'repo_config';
 const LAST_CONTEXT_KEY = 'last_context';
 const LAST_ISSUE_KEY = 'last_issue';
+const AUTH_PREFS_KEY = 'auth_preferences';
+const ALLOWED_SCOPES = new Set(['public_repo', 'repo']);
 const CONTEXT_MENU_ID = 'create-github-issue';
 const MAX_SNIPPET_LENGTH = 5 * 1024; // 5 KB
 
@@ -62,6 +64,7 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
       }
       case 'getAuthState': {
         const token = await getStoredToken();
+        const preferences = await getAuthPreferences();
         sendResponse({
           success: true,
           authenticated: Boolean(token?.access_token),
@@ -72,18 +75,33 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
                 received_at: token.received_at,
                 expires_at: token.expires_at
               }
-            : null
+            : null,
+          scope: preferences.scope || getDefaultScope()
         });
         break;
       }
       case 'signIn': {
         try {
-          const token = await signIn();
+          const token = await signIn(message.scope);
           sendResponse({ success: true, token });
         } catch (error) {
           console.error('Sign-in failed', error);
           sendResponse({ success: false, error: error.message || 'Sign-in failed' });
         }
+        break;
+      }
+      case 'getAuthPreferences': {
+        const preferences = await getAuthPreferences();
+        sendResponse({
+          success: true,
+          preferences,
+          defaultScope: getDefaultScope()
+        });
+        break;
+      }
+      case 'saveAuthPreferences': {
+        await saveAuthPreferences(message.preferences || {});
+        sendResponse({ success: true });
         break;
       }
       case 'signOut': {
@@ -188,15 +206,36 @@ async function clearStoredToken() {
   await chrome.storage.sync.remove(TOKEN_KEY);
 }
 
-async function signIn() {
+async function getAuthPreferences() {
+  const data = await chrome.storage.sync.get(AUTH_PREFS_KEY);
+  const prefs = data?.[AUTH_PREFS_KEY];
+  const scope = sanitizeScope(prefs?.scope);
+  return scope ? { scope } : { scope: null };
+}
+
+async function saveAuthPreferences(preferences = {}) {
+  const scope = sanitizeScope(preferences.scope);
+  if (scope) {
+    await chrome.storage.sync.set({ [AUTH_PREFS_KEY]: { scope } });
+  } else {
+    await chrome.storage.sync.remove(AUTH_PREFS_KEY);
+  }
+}
+
+async function signIn(scopeOverride) {
   const codeVerifier = generateCodeVerifier();
   const codeChallenge = await generateCodeChallenge(codeVerifier);
   const state = generateState();
+  const preferences = await getAuthPreferences();
+  const scope =
+    sanitizeScope(scopeOverride) ||
+    preferences.scope ||
+    getDefaultScope();
 
   const authUrl = new URL('https://github.com/login/oauth/authorize');
   authUrl.searchParams.set('client_id', CLIENT_ID);
   authUrl.searchParams.set('redirect_uri', REDIRECT_URI);
-  authUrl.searchParams.set('scope', GITHUB_SCOPES);
+  authUrl.searchParams.set('scope', scope);
   authUrl.searchParams.set('response_type', 'code');
   authUrl.searchParams.set('code_challenge', codeChallenge);
   authUrl.searchParams.set('code_challenge_method', 'S256');
@@ -262,6 +301,7 @@ async function signIn() {
     expires_at: tokenData.expires_in ? Date.now() + tokenData.expires_in * 1000 : undefined
   };
 
+  await saveAuthPreferences({ scope });
   await chrome.storage.sync.set({ [TOKEN_KEY]: storedToken });
   return storedToken;
 }
@@ -353,4 +393,26 @@ function generateState() {
   const array = new Uint8Array(16);
   crypto.getRandomValues(array);
   return Array.from(array, (byte) => byte.toString(16).padStart(2, '0')).join('');
+}
+
+function sanitizeScope(scope) {
+  if (typeof scope !== 'string') {
+    return null;
+  }
+  const trimmed = scope.trim();
+  if (!trimmed || trimmed === 'GITHUB_SCOPES') {
+    return null;
+  }
+  if (ALLOWED_SCOPES.has(trimmed)) {
+    return trimmed;
+  }
+  return null;
+}
+
+function getDefaultScope() {
+  const sanitized = sanitizeScope(GITHUB_SCOPES);
+  if (!sanitized) {
+    return 'public_repo';
+  }
+  return sanitized;
 }
