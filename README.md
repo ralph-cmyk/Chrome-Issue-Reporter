@@ -13,7 +13,8 @@ issues via the GitHub REST API.
 2. **Extract:** Unzip to a permanent location on your computer
 3. **Install:** Open `chrome://extensions/`, enable Developer mode, click "Load unpacked", and select the extracted folder
 
-📖 **For detailed step-by-step instructions with screenshots, see [INSTALL.md](INSTALL.md)**
+📖 **For detailed step-by-step instructions, see [INSTALL.md](INSTALL.md)**  
+⚡ **For a quick 7-minute setup guide, see [QUICKSTART.md](QUICKSTART.md)**
 
 ## How It Works
 
