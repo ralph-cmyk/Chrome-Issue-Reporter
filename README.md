@@ -50,8 +50,10 @@ extension/
 1. Open the extension’s **Options** page to set the default repository owner, repository name, and
    any labels that should be applied to every issue. You can also sign in or out from the options
    page.
-2. Sign in with GitHub using the PKCE-based OAuth flow. Tokens are stored in `chrome.storage.sync`
-   and can be cleared at any time from the options page.
+2. Sign in with GitHub using the PKCE-based OAuth flow. From the extension popup you can choose
+   whether to grant access to public repositories only or to include private repositories before
+   starting the sign-in. Tokens are stored in `chrome.storage.sync` and can be cleared at any time
+   from the options page.
 3. When you encounter a problem on a web page, right-click and choose **Create GitHub Issue from
    Page/Selection**. The extension captures the current URL, selected text, surrounding HTML, nearby
    script content, and the most recent JavaScript error (if one was recorded).
