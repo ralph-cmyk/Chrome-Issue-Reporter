@@ -78,12 +78,13 @@ jobs:
           
           # Delete all tags except the new one
           git fetch --tags
-          TAGS_TO_DELETE=$(git tag -l | grep -v "^${NEW_TAG}$" || true)
-          if [ -n "$TAGS_TO_DELETE" ]; then
-            echo "Deleting old tags..."
-            echo "$TAGS_TO_DELETE" | xargs -r git push --delete origin || true
-            echo "$TAGS_TO_DELETE" | xargs -r git tag -d || true
-          fi
+          git tag -l | while IFS= read -r tag; do
+            if [ "$tag" != "$NEW_TAG" ]; then
+              echo "Deleting tag: $tag"
+              git push --delete origin "$tag" || true
+              git tag -d "$tag" || true
+            fi
+          done
           
           echo "Cleanup complete"
 
