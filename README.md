@@ -17,18 +17,50 @@ stores tokens securely in `chrome.storage.sync`, and submits issues via the GitH
 📖 **For detailed step-by-step instructions, see [INSTALL.md](INSTALL.md)**  
 ⚡ **For a quick 7-minute setup guide, see [QUICKSTART.md](QUICKSTART.md)**
 
+## ✨ Features
+
+- **🎯 Live Select Mode**: Interactively select problematic elements with visual highlighting
+- **📝 Clean Feedback Interface**: Separate user feedback from technical details
+- **📊 Console Log Capture**: Automatically captures console messages for debugging
+- **🔍 Smart Context Detection**: Captures HTML, CSS selectors, and JavaScript context
+- **🔒 Secure OAuth**: GitHub OAuth device flow for safe authentication
+- **⚡ Direct Integration**: Create issues without leaving your browser
+- **🎨 Beautiful UI**: Modern, gradient-based design with smooth animations
+- **📦 Manifest V3**: Built with the latest Chrome extension standards
+
 ## How It Works
 
+### Method 1: Live Select (NEW! 🎯)
+
+1. Open the extension popup by clicking the extension icon
+2. Click **"🎯 Live Select Element"** button
+3. The page is frozen with an interactive overlay
+4. Hover over elements to see them highlighted
+5. Click on any element to select it
+6. The popup reopens with pre-filled technical details
+7. Add your feedback about what's wrong in the clean text area
+8. Click **"✨ Create Issue"** to submit to GitHub
+
+### Method 2: Context Menu
+
 1. Right-click on any page and select **"Create GitHub Issue from Page/Selection"**
-2. The extension captures:
-   - Current URL
-   - Selected text (if any)
-   - Surrounding HTML context
-   - Recent JavaScript errors
-   - Nearby script content
-3. Review and edit the captured context in the popup
-4. Submit directly to GitHub - the issue is created instantly
-5. Get a link to your newly created issue
+2. The extension captures context from the current selection or page
+3. Review and edit in the popup
+4. Submit directly to GitHub
+
+### What Gets Captured
+
+The extension automatically captures:
+- **Element Details**: Tag name, ID, classes, and CSS selector (with Live Select)
+- **Current URL**: The page where the issue was found
+- **Selected Text**: Any text you had highlighted
+- **HTML Context**: The surrounding HTML structure
+- **Console Logs**: Recent console messages (log, error, warn) - last 20 entries
+- **JavaScript Errors**: Any errors that occurred on the page
+- **Script Content**: Nearby JavaScript code
+- **User Agent**: Browser and OS information
+
+All technical details are stored in a hidden section, keeping your feedback area clean!
 
 ## Project Structure
 
