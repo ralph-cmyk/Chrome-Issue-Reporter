@@ -64,19 +64,22 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
+          set -e
           echo "Deleting previous releases..."
           NEW_TAG="${{ steps.version.outputs.tag }}"
           
           # Get all releases (just tagName field)
-          RELEASES=$(gh release list --limit 100 --json tagName)
+          RELEASES=$(gh release list --limit 100 --json tagName || echo '[]')
           
           # Delete all releases except the new one (they will be recreated with only the new one)
-          echo "$RELEASES" | jq -r '.[].tagName' | while IFS= read -r tag; do
-            if [ -n "$tag" ] && [ "$tag" != "$NEW_TAG" ]; then
-              echo "Deleting release: $tag"
-              gh release delete "$tag" --yes || true
-            fi
-          done
+          if [ "$RELEASES" != "[]" ]; then
+            echo "$RELEASES" | jq -r '.[].tagName' | while IFS= read -r tag; do
+              if [ -n "$tag" ] && [ "$tag" != "$NEW_TAG" ]; then
+                echo "Deleting release: $tag"
+                gh release delete "$tag" --yes || true
+              fi
+            done
+          fi
           
           # Delete all tags except the new one
           git fetch --tags
