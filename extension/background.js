@@ -1,5 +1,6 @@
 const TOKEN_KEY = 'github_token';
 const CONFIG_KEY = 'repo_config';
+const OAUTH_CONFIG_KEY = 'oauth_config';
 const LAST_CONTEXT_KEY = 'last_context';
 const LAST_ISSUE_KEY = 'last_issue';
 const CONTEXT_MENU_ID = 'create-github-issue';
@@ -8,11 +9,9 @@ const MAX_SNIPPET_LENGTH = 5 * 1024; // 5 KB
 // GitHub Device Flow Configuration
 const GITHUB_DEVICE_CODE_URL = 'https://github.com/login/device/code';
 const GITHUB_ACCESS_TOKEN_URL = 'https://github.com/login/oauth/access_token';
-// IMPORTANT: Replace this with your own GitHub OAuth App Client ID
-// The app MUST have Device Flow enabled in GitHub settings
-// Create one at: https://github.com/settings/developers
-// See INSTALL.md for detailed instructions
-const GITHUB_CLIENT_ID = 'Ov23liJyiD9bKVNz2X2w';
+// DEPRECATED: Client ID is now configured by the user in options
+// This is kept as a fallback but should not be used
+const GITHUB_CLIENT_ID_FALLBACK = 'Ov23liJyiD9bKVNz2X2w';
 
 chrome.runtime.onInstalled.addListener(async () => {
   await ensureContextMenu();
@@ -57,6 +56,16 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
       }
       case 'saveConfig': {
         await saveRepoConfig(message.config);
+        sendResponse({ success: true });
+        break;
+      }
+      case 'getOAuthConfig': {
+        const config = await getOAuthConfig();
+        sendResponse({ success: true, config });
+        break;
+      }
+      case 'saveOAuthConfig': {
+        await saveOAuthConfig(message.config);
         sendResponse({ success: true });
         break;
       }
@@ -187,6 +196,25 @@ async function saveRepoConfig(config = {}) {
   await chrome.storage.sync.set({ [CONFIG_KEY]: sanitized });
 }
 
+async function getOAuthConfig() {
+  const data = await chrome.storage.sync.get(OAUTH_CONFIG_KEY);
+  if (data && data[OAUTH_CONFIG_KEY]) {
+    return data[OAUTH_CONFIG_KEY];
+  }
+  return {
+    clientId: '',
+    clientSecret: ''
+  };
+}
+
+async function saveOAuthConfig(config = {}) {
+  const sanitized = {
+    clientId: config.clientId || '',
+    clientSecret: config.clientSecret || ''
+  };
+  await chrome.storage.sync.set({ [OAUTH_CONFIG_KEY]: sanitized });
+}
+
 async function getStoredToken() {
   const data = await chrome.storage.sync.get(TOKEN_KEY);
   return data?.[TOKEN_KEY] || null;
@@ -206,6 +234,25 @@ async function clearStoredToken() {
 
 async function startDeviceFlow(scopes = 'repo') {
   try {
+    // Get the user-configured OAuth client ID
+    const oauthConfig = await getOAuthConfig();
+    const clientId = oauthConfig.clientId || GITHUB_CLIENT_ID_FALLBACK;
+    
+    if (!oauthConfig.clientId) {
+      throw new Error(
+        'OAuth Client ID not configured!\n\n' +
+        'Please configure your GitHub OAuth App Client ID in the extension options before signing in.\n\n' +
+        'Steps:\n' +
+        '1. Go to https://github.com/settings/developers\n' +
+        '2. Create a new OAuth App (or use existing)\n' +
+        '3. Enable Device Flow in the OAuth App settings\n' +
+        '4. Copy the Client ID\n' +
+        '5. Enter it in the extension options\n' +
+        '6. Save and try again\n\n' +
+        'See SETUP-DEVICE-FLOW.md for detailed instructions.'
+      );
+    }
+    
     // Step 1: Request device and user codes
     const deviceCodeResponse = await fetch(GITHUB_DEVICE_CODE_URL, {
       method: 'POST',
@@ -214,7 +261,7 @@ async function startDeviceFlow(scopes = 'repo') {
         'Content-Type': 'application/x-www-form-urlencoded'
       },
       body: new URLSearchParams({
-        client_id: GITHUB_CLIENT_ID,
+        client_id: clientId,
         scope: scopes
       })
     });
@@ -270,6 +317,10 @@ async function pollForDeviceToken(deviceCode, interval = 5) {
   const maxAttempts = 60; // 5 minutes with 5 second intervals
   let attempts = 0;
   
+  // Get the user-configured OAuth client ID
+  const oauthConfig = await getOAuthConfig();
+  const clientId = oauthConfig.clientId || GITHUB_CLIENT_ID_FALLBACK;
+  
   while (attempts < maxAttempts) {
     await sleep(interval * 1000);
     attempts++;
@@ -282,7 +333,7 @@ async function pollForDeviceToken(deviceCode, interval = 5) {
           'Content-Type': 'application/x-www-form-urlencoded'
         },
         body: new URLSearchParams({
-          client_id: GITHUB_CLIENT_ID,
+          client_id: clientId,
           device_code: deviceCode,
           grant_type: 'urn:ietf:params:oauth:grant-type:device_code'
         })

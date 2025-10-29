@@ -1,8 +1,10 @@
 async function init() {
   await loadConfig();
+  await loadOAuthConfig();
   await refreshAuthState();
 
   document.getElementById('save').addEventListener('click', handleSave);
+  document.getElementById('save-oauth-config').addEventListener('click', handleSaveOAuthConfig);
   document.getElementById('oauth-signin').addEventListener('click', handleOAuthSignIn);
   document.getElementById('sign-out').addEventListener('click', handleSignOut);
   document.getElementById('repo-url').addEventListener('input', handleRepoUrlChange);
@@ -14,6 +16,22 @@ document.addEventListener('DOMContentLoaded', init);
 
 async function handleOAuthSignIn() {
   const button = document.getElementById('oauth-signin');
+  
+  // Validate OAuth configuration first
+  const oauthConfig = await chrome.runtime.sendMessage({ type: 'getOAuthConfig' });
+  if (!oauthConfig?.success || !oauthConfig.config?.clientId) {
+    setStatus('❌ OAuth Configuration Missing\n\n' +
+      '⚠️ You must configure your GitHub OAuth App Client ID before signing in.\n\n' +
+      '📋 Steps:\n' +
+      '1. Create a GitHub OAuth App at https://github.com/settings/developers\n' +
+      '2. Enable Device Flow in the OAuth App settings\n' +
+      '3. Enter your Client ID in the field above\n' +
+      '4. Click "Save OAuth Configuration"\n' +
+      '5. Then try signing in again\n\n' +
+      'See SETUP-DEVICE-FLOW.md for detailed instructions.', 'error');
+    return;
+  }
+  
   button.disabled = true;
   button.classList.add('loading');
   setStatus('🔄 Starting GitHub Device Flow...', 'info');
@@ -137,6 +155,50 @@ async function loadConfig() {
     labelsInput.value = Array.isArray(response.config.labels)
       ? response.config.labels.join(', ')
       : '';
+  }
+}
+
+async function loadOAuthConfig() {
+  const clientIdInput = document.getElementById('client-id');
+  const clientSecretInput = document.getElementById('client-secret');
+
+  const response = await chrome.runtime.sendMessage({ type: 'getOAuthConfig' });
+  if (response?.success && response.config) {
+    clientIdInput.value = response.config.clientId || '';
+    clientSecretInput.value = response.config.clientSecret || '';
+  }
+}
+
+async function handleSaveOAuthConfig() {
+  const clientId = document.getElementById('client-id').value.trim();
+  const clientSecret = document.getElementById('client-secret').value.trim();
+
+  if (!clientId) {
+    setStatus('⚠️ Client ID Required\n\n' +
+      'GitHub OAuth App Client ID is required. Get it from:\n' +
+      'https://github.com/settings/developers', 'error');
+    return;
+  }
+
+  const button = document.getElementById('save-oauth-config');
+  button.disabled = true;
+  button.classList.add('loading');
+
+  const response = await chrome.runtime.sendMessage({
+    type: 'saveOAuthConfig',
+    config: { clientId, clientSecret }
+  });
+
+  button.disabled = false;
+  button.classList.remove('loading');
+
+  if (response?.success) {
+    setStatus('✅ OAuth Configuration saved successfully!\n\n' +
+      `🔑 Client ID: ${clientId.substring(0, 10)}...\n\n` +
+      '💡 You can now sign in with GitHub using the button below.', 'success');
+  } else {
+    setStatus('❌ Unable to save OAuth configuration\n\n' + 
+      (response?.error || 'Unknown error occurred'), 'error');
   }
 }
 
