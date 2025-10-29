@@ -1,6 +1,10 @@
 let cachedContext = null;
 let defaultLabels = [];
 
+// Constants
+const SCRIPT_INITIALIZATION_DELAY = 100; // ms to wait for content script to initialize
+const UNSUPPORTED_URL_PREFIXES = ['chrome://', 'chrome-extension://', 'edge://', 'about:'];
+
 const statusEl = document.getElementById('status');
 const titleInput = document.getElementById('title');
 const bodyInput = document.getElementById('body');
@@ -159,13 +163,34 @@ async function handleLiveSelect() {
       return;
     }
     
-    // Close the popup and start live select mode
-    setStatus('🎯 Click on any element on the page...', 'info');
+    // Check if page supports content scripts
+    if (tab.url && UNSUPPORTED_URL_PREFIXES.some(prefix => tab.url.startsWith(prefix))) {
+      setStatus('❌ Live select is not supported on browser internal pages.', 'error');
+      return;
+    }
     
-    // Send message to content script
-    await chrome.tabs.sendMessage(tab.id, { type: 'startLiveSelect' });
+    // Try to communicate with content script, inject if needed
+    try {
+      await chrome.tabs.sendMessage(tab.id, { type: 'startLiveSelect' });
+    } catch (error) {
+      // Content script not responding, try to inject it
+      try {
+        await chrome.scripting.executeScript({
+          target: { tabId: tab.id },
+          files: ['content.js']
+        });
+        // Wait for the script to initialize
+        await new Promise(resolve => setTimeout(resolve, SCRIPT_INITIALIZATION_DELAY));
+        // Try sending the message again
+        await chrome.tabs.sendMessage(tab.id, { type: 'startLiveSelect' });
+      } catch (injectError) {
+        console.error('Failed to inject content script:', injectError);
+        throw new Error('Cannot start live select on this page. The page may restrict extensions.');
+      }
+    }
     
     // Close popup so user can see the page
+    setStatus('🎯 Click on any element on the page...', 'info');
     window.close();
   } catch (error) {
     console.error('Live select error:', error);
