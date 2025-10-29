@@ -4,7 +4,6 @@ async function init() {
 
   document.getElementById('save').addEventListener('click', handleSave);
   document.getElementById('oauth-signin').addEventListener('click', handleOAuthSignIn);
-  document.getElementById('sign-in').addEventListener('click', handleSignIn);
   document.getElementById('sign-out').addEventListener('click', handleSignOut);
   document.getElementById('repo-url').addEventListener('input', handleRepoUrlChange);
   document.getElementById('fetch-repos').addEventListener('click', handleFetchRepos);
@@ -153,30 +152,6 @@ async function handleSave() {
   }
 }
 
-async function handleSignIn() {
-  const tokenInput = document.getElementById('token');
-  const token = tokenInput.value.trim();
-  
-  if (!token) {
-    setStatus('⚠️ Please enter a Personal Access Token.');
-    return;
-  }
-
-  setStatus('🔄 Validating token...');
-  const response = await chrome.runtime.sendMessage({ 
-    type: 'signIn',
-    token: token 
-  });
-  
-  if (response?.success) {
-    setStatus('✅ Token validated and saved successfully!');
-    tokenInput.value = '';
-  } else {
-    setStatus('❌ ' + (response?.error || 'Sign-in failed.'));
-  }
-  await refreshAuthState();
-}
-
 async function handleSignOut() {
   await chrome.runtime.sendMessage({ type: 'signOut' });
   setStatus('✅ Signed out successfully.');
@@ -185,24 +160,18 @@ async function handleSignOut() {
 
 async function refreshAuthState() {
   const oauthSignIn = document.getElementById('oauth-signin');
-  const signIn = document.getElementById('sign-in');
   const signOut = document.getElementById('sign-out');
-  const tokenInput = document.getElementById('token');
   const fetchRepos = document.getElementById('fetch-repos');
 
   const response = await chrome.runtime.sendMessage({ type: 'getAuthState' });
   if (response?.success && response.authenticated) {
     oauthSignIn.textContent = '🔐 Re-authenticate with GitHub';
-    signIn.textContent = 'Update Token';
     signOut.disabled = false;
     fetchRepos.disabled = false;
-    tokenInput.placeholder = 'Enter new token to update...';
   } else {
     oauthSignIn.textContent = '🔐 Sign in with GitHub';
-    signIn.textContent = 'Save & Validate Token';
     signOut.disabled = true;
     fetchRepos.disabled = true;
-    tokenInput.placeholder = 'ghp_xxxxxxxxxxxxxxxxxxxx or github_pat_xxxxxxxxxxxxxxxxxxxx';
   }
 }
 

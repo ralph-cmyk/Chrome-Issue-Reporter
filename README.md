@@ -71,8 +71,7 @@ After installation, you need to configure the extension:
 
 📖 **See [INSTALL.md](INSTALL.md) for detailed setup instructions**
 
-> **Note:** This extension uses GitHub's Device Flow for authentication - no OAuth app setup required! 
-> You can also use a Personal Access Token if you prefer.
+> **Note:** This extension uses GitHub's Device Flow for authentication - no OAuth app setup required!
 
 ## Using the extension
 
@@ -88,9 +87,6 @@ After installation, you need to configure the extension:
 4. The browser action popup shows the captured context, lets you edit the issue title and body, and
    submit the issue directly to GitHub. After submission the popup links to the newly created issue.
 
-> **Alternative:** You can also sign in using a Personal Access Token instead of the Device Flow. 
-> Create one at [github.com/settings/tokens](https://github.com/settings/tokens/new) with `repo` scope 
-> and enter it in the Options page.
 
 ## Permissions and privacy
 

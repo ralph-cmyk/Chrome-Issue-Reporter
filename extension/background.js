@@ -64,16 +64,6 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
         });
         break;
       }
-      case 'signIn': {
-        try {
-          const result = await signIn(message.token);
-          sendResponse({ success: true, ...result });
-        } catch (error) {
-          console.error('Sign-in failed', error);
-          sendResponse({ success: false, error: error.message || 'Sign-in failed' });
-        }
-        break;
-      }
       case 'startDeviceFlow': {
         try {
           const result = await startDeviceFlow(message.scopes || 'repo');
@@ -210,51 +200,16 @@ async function clearStoredToken() {
   await chrome.storage.sync.remove(TOKEN_KEY);
 }
 
-async function validateToken(token) {
-  if (!token) {
-    return false;
-  }
-  try {
-    const response = await fetch('https://api.github.com/user', {
-      headers: {
-        Authorization: `token ${token}`,
-        Accept: 'application/vnd.github+json',
-        'X-GitHub-Api-Version': '2022-11-28'
-      }
-    });
-    return response.ok;
-  } catch (error) {
-    console.error('Token validation failed:', error);
-    return false;
-  }
-}
-
-async function signIn(token) {
-  if (!token || typeof token !== 'string' || !token.trim()) {
-    throw new Error('Valid token is required.');
-  }
-  
-  const trimmedToken = token.trim();
-  const isValid = await validateToken(trimmedToken);
-  
-  if (!isValid) {
-    throw new Error('Invalid token. Please check your Personal Access Token.');
-  }
-  
-  await saveToken(trimmedToken);
-  return { success: true };
-}
-
 async function startDeviceFlow(scopes = 'repo') {
   try {
     // Step 1: Request device and user codes
     const deviceCodeResponse = await fetch(GITHUB_DEVICE_CODE_URL, {
       method: 'POST',
       headers: {
-        'Accept': 'application/json',
-        'Content-Type': 'application/json'
+        Accept: 'application/json',
+        'Content-Type': 'application/x-www-form-urlencoded'
       },
-      body: JSON.stringify({
+      body: new URLSearchParams({
         client_id: GITHUB_CLIENT_ID,
         scope: scopes
       })
@@ -299,10 +254,10 @@ async function pollForDeviceToken(deviceCode, interval = 5) {
       const response = await fetch(GITHUB_ACCESS_TOKEN_URL, {
         method: 'POST',
         headers: {
-          'Accept': 'application/json',
-          'Content-Type': 'application/json'
+          Accept: 'application/json',
+          'Content-Type': 'application/x-www-form-urlencoded'
         },
-        body: JSON.stringify({
+        body: new URLSearchParams({
           client_id: GITHUB_CLIENT_ID,
           device_code: deviceCode,
           grant_type: 'urn:ietf:params:oauth:grant-type:device_code'
@@ -395,7 +350,7 @@ async function fetchUserRepos() {
 async function createIssue(payload = {}) {
   const token = await getStoredToken();
   if (!token) {
-    throw new Error('Authentication required. Please sign in with your Personal Access Token.');
+    throw new Error('Authentication required. Please sign in with GitHub.');
   }
 
   const { owner, repo, labels } = await getRepoConfig();
