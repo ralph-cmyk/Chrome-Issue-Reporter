@@ -129,10 +129,11 @@ jobs:
             ### Configuration Required
             
             After installation, configure the extension:
-            1. Open the extension's **Options** page
-            2. Sign in with GitHub
-            3. Select your target repository
-            4. Start creating issues!
+            1. Create a GitHub OAuth App at https://github.com/settings/developers
+            2. Open the extension's **Options** page and enter your OAuth App Client ID
+            3. Sign in with GitHub
+            4. Select your target repository
+            5. Start creating issues!
             
             📖 See [QUICKSTART.md](https://github.com/${{ github.repository }}/blob/main/QUICKSTART.md) for a 7-minute setup guide
         env:
