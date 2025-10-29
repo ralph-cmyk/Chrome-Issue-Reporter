@@ -263,7 +263,10 @@ async function startDeviceFlow(scopes = 'repo') {
     });
     
     if (!deviceCodeResponse.ok) {
-      throw new Error('Failed to initiate device flow');
+      const errorData = await safeParseJson(deviceCodeResponse);
+      const errorMessage = errorData?.error_description || errorData?.message || 
+                          `Failed to initiate device flow (status: ${deviceCodeResponse.status})`;
+      throw new Error(errorMessage);
     }
     
     const deviceData = await deviceCodeResponse.json();
