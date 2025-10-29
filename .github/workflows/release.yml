@@ -118,7 +118,7 @@ jobs:
             
             After installation, configure the extension:
             1. Open the extension's **Options** page
-            2. Sign in with GitHub using Device Flow (no OAuth app needed!)
+            2. Sign in with GitHub
             3. Select your target repository
             4. Start creating issues!
             

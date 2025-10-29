@@ -100,20 +100,16 @@ Then follow [Method 1](#method-1-install-from-pre-built-zip-recommended) to inst
 
 After installation, you must configure the extension with your GitHub OAuth App:
 
-### Step 1: Create a GitHub OAuth App with Device Flow
+### Step 1: Create a GitHub OAuth App
 
 1. Go to [GitHub Settings → Developer settings → OAuth Apps](https://github.com/settings/developers)
 2. Click **New OAuth App**
 3. Fill in the details:
    - **Application name:** Chrome Issue Reporter (or your preferred name)
    - **Homepage URL:** `https://github.com/ralph-cmyk/Chrome-Issue-Reporter` (or your preferred URL)
-   - **Authorization callback URL:** `http://localhost` (This is not used for Device Flow but is required by GitHub)
+   - **Authorization callback URL:** `http://localhost` (This is required by GitHub)
 4. Click **Register application**
-5. **IMPORTANT:** After creating the app, click on the app name to open its settings
-6. Scroll down and find the **"Enable Device Flow"** checkbox
-7. ✅ **Check "Enable Device Flow"** - This is REQUIRED for the extension to work!
-8. Click **Update application**
-9. Note your **Client ID** (starts with "Ov23...")
+5. Note your **Client ID** (starts with "Ov23...")
 
 ### Step 2: Update Extension Configuration
 
@@ -158,7 +154,6 @@ After installation, you must configure the extension with your GitHub OAuth App:
 ### OAuth errors
 - **"404 Not Found" or "Failed to start device flow":**
   - Your OAuth App might not exist or the Client ID is incorrect
-  - Make sure you **enabled Device Flow** in your OAuth App settings (this is NOT enabled by default!)
   - Verify your Client ID in `background.js` matches the one from your OAuth App
   - Double-check that you created an **OAuth App** (not a GitHub App - they are different!)
 - **"Authorization pending" timeout:**
