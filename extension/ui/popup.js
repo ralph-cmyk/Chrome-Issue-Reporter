@@ -159,13 +159,35 @@ async function handleLiveSelect() {
       return;
     }
     
-    // Close the popup and start live select mode
-    setStatus('🎯 Click on any element on the page...', 'info');
+    // Check if page supports content scripts
+    if (tab.url && (tab.url.startsWith('chrome://') || tab.url.startsWith('chrome-extension://') || 
+        tab.url.startsWith('edge://') || tab.url.startsWith('about:'))) {
+      setStatus('❌ Live select is not supported on browser internal pages.', 'error');
+      return;
+    }
     
-    // Send message to content script
-    await chrome.tabs.sendMessage(tab.id, { type: 'startLiveSelect' });
+    // Try to inject content script if not already loaded
+    try {
+      await chrome.tabs.sendMessage(tab.id, { type: 'startLiveSelect' });
+    } catch (error) {
+      // Content script might not be loaded, try to inject it
+      try {
+        await chrome.scripting.executeScript({
+          target: { tabId: tab.id },
+          files: ['content.js']
+        });
+        // Wait a bit for the script to initialize
+        await new Promise(resolve => setTimeout(resolve, 100));
+        // Try sending the message again
+        await chrome.tabs.sendMessage(tab.id, { type: 'startLiveSelect' });
+      } catch (injectError) {
+        console.error('Failed to inject content script:', injectError);
+        throw new Error('Cannot start live select on this page. The page may restrict extensions.');
+      }
+    }
     
     // Close popup so user can see the page
+    setStatus('🎯 Click on any element on the page...', 'info');
     window.close();
   } catch (error) {
     console.error('Live select error:', error);
