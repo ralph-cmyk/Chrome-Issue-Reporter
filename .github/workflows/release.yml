@@ -55,13 +55,15 @@ jobs:
           echo "Deleting previous releases..."
           NEW_TAG="${{ inputs.tag_name }}"
           
-          # Get all releases
-          RELEASES=$(gh release list --limit 100 --json tagName,id)
+          # Get all releases (just tagName field)
+          RELEASES=$(gh release list --limit 100 --json tagName)
           
-          # Delete all releases (they will be recreated with only the new one)
-          echo "$RELEASES" | jq -r '.[] | "\(.id) \(.tagName)"' | while read -r id tag; do
-            echo "Deleting release: $tag (ID: $id)"
-            gh release delete "$tag" --yes || true
+          # Delete all releases except the new one (they will be recreated with only the new one)
+          echo "$RELEASES" | jq -r '.[].tagName' | while IFS= read -r tag; do
+            if [ -n "$tag" ] && [ "$tag" != "$NEW_TAG" ]; then
+              echo "Deleting release: $tag"
+              gh release delete "$tag" --yes || true
+            fi
           done
           
           # Delete all tags except the new one
