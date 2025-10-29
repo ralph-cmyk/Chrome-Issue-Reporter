@@ -137,6 +137,19 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
         sendResponse({ success: true, issue: data?.[LAST_ISSUE_KEY] || null });
         break;
       }
+      case 'liveSelectComplete': {
+        // Store the context from live select
+        if (message.context) {
+          await chrome.storage.local.set({ [LAST_CONTEXT_KEY]: message.context });
+          try {
+            await chrome.action.openPopup();
+          } catch (popupError) {
+            console.debug('Unable to open popup automatically:', popupError);
+          }
+        }
+        sendResponse({ success: true });
+        break;
+      }
       default:
         sendResponse({ success: false, error: 'Unknown message type' });
     }

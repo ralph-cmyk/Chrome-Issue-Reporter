@@ -90,6 +90,28 @@
         font-family: inherit;
       }
       
+      button#live-select {
+        width: 100%;
+        background: linear-gradient(135deg, #34d399 0%, #10b981 100%);
+        color: white;
+        box-shadow: 0 4px 12px rgba(16, 185, 129, 0.3);
+        margin-bottom: 8px;
+      }
+      
+      button#live-select:hover:not(:disabled) {
+        transform: translateY(-2px);
+        box-shadow: 0 6px 16px rgba(16, 185, 129, 0.4);
+      }
+      
+      button#live-select:active:not(:disabled) {
+        transform: translateY(0);
+      }
+      
+      button#live-select:disabled {
+        opacity: 0.6;
+        cursor: not-allowed;
+      }
+      
       button#create {
         width: 100%;
         background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
@@ -314,9 +336,12 @@
         <label for="title">📝 Issue Title</label>
         <input id="title" type="text" required placeholder="Describe the issue briefly..." />
 
-        <label for="body">📄 Issue Description</label>
-        <textarea id="body" placeholder="Provide detailed information about the issue..."></textarea>
+        <label for="body">📄 What's Wrong?</label>
+        <textarea id="body" placeholder="Describe what's wrong with the selected element or page..."></textarea>
+        
+        <input type="hidden" id="technical-context" />
 
+        <button id="live-select" type="button">🎯 Live Select Element</button>
         <button id="create" type="submit">✨ Create Issue</button>
       </form>
       
