@@ -32,9 +32,6 @@ jobs:
           echo "version=$VERSION" >> $GITHUB_OUTPUT
           echo "Extension version: $VERSION"
       
-      - name: Rename package for clarity
-        run: mv chrome-issue-reporter.zip chrome-issue-reporter-extension.zip
-      
       - name: Upload artifact
         uses: actions/upload-artifact@v4
         with:
