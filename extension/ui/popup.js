@@ -4,9 +4,11 @@ let defaultLabels = [];
 const statusEl = document.getElementById('status');
 const titleInput = document.getElementById('title');
 const bodyInput = document.getElementById('body');
+const technicalContextInput = document.getElementById('technical-context');
 const contextPreviewEl = document.getElementById('context-preview');
 const lastIssueEl = document.getElementById('last-issue');
 const createButton = document.getElementById('create');
+const liveSelectButton = document.getElementById('live-select');
 const clearContextButton = document.getElementById('clear-context');
 const openOptionsLink = document.getElementById('open-options');
 
@@ -14,6 +16,7 @@ init();
 
 function init() {
   document.getElementById('issue-form').addEventListener('submit', handleSubmit);
+  liveSelectButton.addEventListener('click', handleLiveSelect);
   clearContextButton.addEventListener('click', handleClearContext);
   openOptionsLink.addEventListener('click', (event) => {
     event.preventDefault();
@@ -68,15 +71,21 @@ async function loadContext() {
   if (response?.success && response.context) {
     cachedContext = response.context;
     contextPreviewEl.textContent = formatContextPreview(cachedContext);
+    
+    // Store technical context in hidden field
+    technicalContextInput.value = buildTechnicalContext(cachedContext);
+    
     if (!titleInput.value) {
       titleInput.value = buildDefaultTitle(cachedContext);
     }
-    if (!bodyInput.value) {
-      bodyInput.value = buildIssueBody(cachedContext);
+    // Don't pre-fill body - let user add their feedback
+    if (!bodyInput.value && cachedContext.elementDescription) {
+      bodyInput.placeholder = `Describe what's wrong with: ${cachedContext.elementDescription}`;
     }
   } else {
     cachedContext = null;
-    contextPreviewEl.textContent = 'No captured context yet. Use the context menu to collect details.';
+    technicalContextInput.value = '';
+    contextPreviewEl.textContent = 'No captured context yet. Use "Live Select" or the context menu to collect details.';
   }
 }
 
@@ -92,10 +101,21 @@ async function loadLastIssue() {
 async function handleSubmit(event) {
   event.preventDefault();
   const title = titleInput.value.trim();
-  const body = bodyInput.value;
+  const userFeedback = bodyInput.value.trim();
+  const technicalContext = technicalContextInput.value;
+  
   if (!title) {
     setStatus('Title is required.', 'error');
     return;
+  }
+
+  // Combine user feedback with technical context
+  let fullBody = '';
+  if (userFeedback) {
+    fullBody = `## Issue Description\n\n${userFeedback}\n\n`;
+  }
+  if (technicalContext) {
+    fullBody += `---\n\n## Technical Context\n\n${technicalContext}`;
   }
 
   setLoading(true);
@@ -105,7 +125,7 @@ async function handleSubmit(event) {
       type: 'createIssue',
       payload: {
         title,
-        body,
+        body: fullBody || userFeedback,
         labels: defaultLabels
       }
     });
@@ -124,12 +144,38 @@ async function handleSubmit(event) {
   }
 }
 
+async function handleLiveSelect() {
+  try {
+    // Get the active tab
+    const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
+    
+    if (!tab?.id) {
+      setStatus('❌ No active tab found.', 'error');
+      return;
+    }
+    
+    // Close the popup and start live select mode
+    setStatus('🎯 Click on any element on the page...', 'info');
+    
+    // Send message to content script
+    await chrome.tabs.sendMessage(tab.id, { type: 'startLiveSelect' });
+    
+    // Close popup so user can see the page
+    window.close();
+  } catch (error) {
+    console.error('Live select error:', error);
+    setStatus('❌ ' + (error.message || 'Failed to start live select.'), 'error');
+  }
+}
+
 async function handleClearContext() {
   await chrome.runtime.sendMessage({ type: 'clearLastContext' });
   cachedContext = null;
   contextPreviewEl.textContent = 'Context cleared.';
   bodyInput.value = '';
+  bodyInput.placeholder = 'Describe what\'s wrong with the selected element or page...';
   titleInput.value = '';
+  technicalContextInput.value = '';
   setStatus('🗑️ Context cleared.', 'info');
 }
 
@@ -137,35 +183,60 @@ function buildDefaultTitle(context) {
   if (!context) {
     return '';
   }
+  if (context.elementDescription) {
+    return `Issue with ${context.elementDescription}`;
+  }
   if (context.title) {
     return `Issue: ${context.title}`;
   }
   return `Issue for ${context.url}`;
 }
 
-function buildIssueBody(context) {
+function buildTechnicalContext(context) {
   if (!context) {
     return '';
   }
   const lines = [];
+  
+  lines.push('### Page Information');
   lines.push(`**URL:** ${context.url || 'N/A'}`);
+  lines.push(`**Page Title:** ${context.title || 'N/A'}`);
   lines.push(`**User Agent:** ${context.userAgent || 'N/A'}`);
   lines.push('');
-  lines.push('**Selection:**');
-  lines.push(context.selectedText ? context.selectedText : '_None_');
-  lines.push('');
-  lines.push('HTML:');
-  lines.push('```html');
-  lines.push(context.htmlSnippet ? context.htmlSnippet : '');
-  lines.push('```');
-  lines.push('');
-  lines.push('JS:');
-  lines.push('```javascript');
-  lines.push(context.scriptSnippet ? context.scriptSnippet : '');
-  lines.push('```');
-  if (context.jsError) {
+  
+  if (context.elementDescription) {
+    lines.push('### Selected Element');
+    lines.push(`**Element:** ${context.elementDescription}`);
+    if (context.cssSelector) {
+      lines.push(`**CSS Selector:** \`${context.cssSelector}\``);
+    }
     lines.push('');
-    lines.push('**Last JS Error:**');
+  }
+  
+  if (context.selectedText) {
+    lines.push('### Selected Text');
+    lines.push(context.selectedText);
+    lines.push('');
+  }
+  
+  if (context.htmlSnippet) {
+    lines.push('### HTML Snippet');
+    lines.push('```html');
+    lines.push(context.htmlSnippet);
+    lines.push('```');
+    lines.push('');
+  }
+  
+  if (context.scriptSnippet) {
+    lines.push('### JavaScript');
+    lines.push('```javascript');
+    lines.push(context.scriptSnippet);
+    lines.push('```');
+    lines.push('');
+  }
+  
+  if (context.jsError) {
+    lines.push('### Last JavaScript Error');
     lines.push('```');
     lines.push(`${context.jsError.message || 'Unknown error'}`);
     if (context.jsError.source) {
@@ -173,13 +244,35 @@ function buildIssueBody(context) {
     }
     lines.push('Timestamp: ' + new Date(context.jsError.timestamp).toISOString());
     lines.push('```');
+    lines.push('');
   }
+  
+  if (context.consoleLogs) {
+    lines.push('### Console Logs (Recent)');
+    lines.push('```');
+    lines.push(context.consoleLogs || 'No console logs captured');
+    lines.push('```');
+    lines.push('');
+  }
+  
   return lines.join('\n');
+}
+
+function buildIssueBody(context) {
+  // This is kept for backwards compatibility with context menu
+  // but now we separate user feedback from technical context
+  return buildTechnicalContext(context);
 }
 
 function formatContextPreview(context) {
   const parts = [];
+  
+  if (context.elementDescription) {
+    parts.push(`Selected: ${context.elementDescription}`);
+  }
+  
   parts.push(context.url);
+  
   if (context.selectedText) {
     parts.push('\nSelection:\n' + truncate(context.selectedText));
   }
@@ -192,6 +285,13 @@ function formatContextPreview(context) {
   if (context.jsError) {
     parts.push(`\nLast error: ${context.jsError.message}`);
   }
+  if (context.consoleLogs) {
+    const logLines = context.consoleLogs.split('\n').filter(l => l.trim());
+    if (logLines.length > 0) {
+      parts.push(`\n${logLines.length} console log(s) captured.`);
+    }
+  }
+  
   return parts.join('\n');
 }
 
