@@ -119,7 +119,7 @@ After installation, you must configure the extension with your GitHub OAuth App:
 
 1. Navigate to the extension folder (the one you installed)
 2. Open `background.js` in a text editor
-3. Find this line (around line 11):
+3. Find this line (line 15):
    ```javascript
    const GITHUB_CLIENT_ID = 'Ov23liJyiD9bKVNz2X2w';
    ```

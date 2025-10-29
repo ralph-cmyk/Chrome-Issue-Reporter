@@ -57,7 +57,7 @@ After creating the OAuth App:
 
 1. Open the extension folder on your computer
 2. Edit `extension/background.js` in any text editor
-3. Find this line (around line 15):
+3. Find this line (line 15):
    ```javascript
    const GITHUB_CLIENT_ID = 'Ov23liJyiD9bKVNz2X2w';
    ```
@@ -198,7 +198,7 @@ The Client ID `Ov23liJyiD9bKVNz2X2w` in the code is:
 | Create OAuth App | https://github.com/settings/developers | Click "New OAuth App" |
 | Enable Device Flow | OAuth App settings page | Check the "Enable Device Flow" box |
 | Client ID | OAuth App settings page | `Ov23liYourClientIdHere` |
-| Update Client ID | `extension/background.js` | Line ~15: `const GITHUB_CLIENT_ID` |
+| Update Client ID | `extension/background.js` | Line 15: `const GITHUB_CLIENT_ID` |
 | Reload Extension | chrome://extensions/ | Click 🔄 button |
 | Test Sign In | Extension Options page | Click "Sign in with GitHub" |
 

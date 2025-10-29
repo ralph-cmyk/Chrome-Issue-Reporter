@@ -39,7 +39,7 @@ Unzip the file to a **permanent location** (e.g., `Documents/ChromeExtensions/`)
 ### Step 2: Configure Extension
 1. Open the extracted extension folder
 2. Edit `background.js` in a text editor
-3. Find this line (around line 11):
+3. Find this line (line 15):
    ```javascript
    const GITHUB_CLIENT_ID = 'Ov23liJyiD9bKVNz2X2w';
    ```
