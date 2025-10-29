@@ -41,12 +41,40 @@ jobs:
           path: chrome-issue-reporter-extension.zip
           retention-days: 90
       
-      - name: Create tag
+      - name: Create new tag
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
           git tag -a "${{ inputs.tag_name }}" -m "Release ${{ inputs.tag_name }}"
           git push origin "${{ inputs.tag_name }}"
+      
+      - name: Delete previous releases
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          echo "Deleting previous releases..."
+          NEW_TAG="${{ inputs.tag_name }}"
+          
+          # Get all releases
+          RELEASES=$(gh release list --limit 100 --json tagName,id)
+          
+          # Delete all releases (they will be recreated with only the new one)
+          echo "$RELEASES" | jq -r '.[] | "\(.id) \(.tagName)"' | while read -r id tag; do
+            echo "Deleting release: $tag (ID: $id)"
+            gh release delete "$tag" --yes || true
+          done
+          
+          # Delete all tags except the new one
+          git fetch --tags
+          git tag -l | while IFS= read -r tag; do
+            if [ "$tag" != "$NEW_TAG" ]; then
+              echo "Deleting tag: $tag"
+              git push --delete origin "$tag" || true
+              git tag -d "$tag" || true
+            fi
+          done
+          
+          echo "Cleanup complete"
       
       - name: Create Release
         uses: softprops/action-gh-release@v1
