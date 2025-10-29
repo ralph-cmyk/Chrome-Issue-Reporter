@@ -25,14 +25,19 @@ jobs:
         id: version
         run: |
           set -euo pipefail
-          
+
           # Get the highest numeric version tag (format: vN where N is a number)
-          LATEST_VERSION=$(git tag -l 'v*' | grep -E '^v[0-9]+$' | sed 's/^v//' | sort -n | tail -1 || echo "0")
-          
+          LATEST_VERSION=$(git tag -l 'v*' | grep -E '^v[0-9]+$' | sed 's/^v//' | sort -n | tail -1 || true)
+
+          # If no version tags exist, start at 0
+          if [ -z "$LATEST_VERSION" ]; then
+            LATEST_VERSION=0
+          fi
+
           # Increment version
           NEXT_VERSION=$((LATEST_VERSION + 1))
           TAG="v${NEXT_VERSION}"
-          
+
           echo "Latest version: v${LATEST_VERSION}"
           echo "Next version: ${TAG}"
           echo "tag=${TAG}" >> "$GITHUB_OUTPUT"
