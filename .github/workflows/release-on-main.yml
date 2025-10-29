@@ -23,12 +23,34 @@ jobs:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           set -euo pipefail
-          SHORT_SHA=${GITHUB_SHA::7}
-          TAG="v$(date -u +'%Y.%m.%d')-${SHORT_SHA}"
+          
+          # Fetch all tags
+          git fetch --tags
+          
+          # Get the highest numeric version tag (format: vN where N is a number)
+          # Filter for tags matching vN pattern, extract the number, sort, and get the highest
+          LATEST_VERSION=$(git tag -l 'v*' | grep -E '^v[0-9]+$' | sed 's/^v//' | sort -n | tail -1)
+          
+          # If no version tags exist, start at 0
+          if [ -z "$LATEST_VERSION" ]; then
+            LATEST_VERSION=0
+          fi
+          
+          # Increment version
+          NEXT_VERSION=$((LATEST_VERSION + 1))
+          TAG="v${NEXT_VERSION}"
+          
+          echo "Latest version: v${LATEST_VERSION}"
+          echo "Next version: ${TAG}"
           echo "tag=$TAG" >> "$GITHUB_OUTPUT"
+          
+          # Configure git
           git config user.name "${{ github.actor }}"
           git config user.email "${{ github.actor }}@users.noreply.github.com"
+          
+          # Create and push tag
           git tag -a "$TAG" -m "Release $TAG"
           git push origin "$TAG"
+          
           echo "Created and pushed tag: $TAG"
           echo "The release.yml workflow will now build and create the GitHub release with the extension package."
