@@ -55,43 +55,46 @@ Chrome-Issue-Reporter/
 
 After installation, you need to configure the extension:
 
-1. **Create a GitHub OAuth App:**
-   - Go to [GitHub Settings → Developer settings → OAuth Apps](https://github.com/settings/developers)
-   - Create a new OAuth App with callback URL: `https://<YOUR_EXTENSION_ID>.chromiumapp.org/`
-   - Note your Client ID
+1. **Sign in with GitHub:**
+   - Open the extension's **Options** page
+   - Click **"Sign in with GitHub"** to start the Device Flow
+   - You'll receive a code to enter on GitHub.com
+   - After authorization, you're ready to go!
 
-2. **Update the extension:**
-   - Open `background.js` in your installed extension folder
-   - Update `CLIENT_ID`, `REDIRECT_URI`, and default repository settings
-   - Reload the extension in `chrome://extensions/`
+2. **Select a Repository:**
+   - After signing in, click **"Load My Repositories"**
+   - Choose the repository where you want to create issues from the dropdown
+   - Or manually enter the repository owner and name
 
-3. **Sign in:**
-   - Click the extension icon and sign in with GitHub
-   - Grant the necessary permissions
+3. **Start Using:**
+   - Right-click on any page and select **"Create GitHub Issue from Page/Selection"**
+   - Review and submit your issue!
 
-📖 **See [INSTALL.md](INSTALL.md) for complete configuration instructions**
+📖 **See [INSTALL.md](INSTALL.md) for detailed setup instructions**
 
-> **Important:** This extension never ships a client secret. The OAuth flow uses PKCE and the
-> browser-managed redirect URL for security.
+> **Note:** This extension uses GitHub's Device Flow for authentication - no OAuth app setup required! 
+> You can also use a Personal Access Token if you prefer.
 
 ## Using the extension
 
-1. Open the extension’s **Options** page to set the default repository owner, repository name, and
-   any labels that should be applied to every issue. You can also sign in or out from the options
-   page.
-2. Sign in with GitHub using the PKCE-based OAuth flow. From the extension popup you can choose
-   whether to grant access to public repositories only or to include private repositories before
-   starting the sign-in. Tokens are stored in `chrome.storage.sync` and can be cleared at any time
-   from the options page.
+1. **Sign in with GitHub:** Open the extension's **Options** page and click **"Sign in with GitHub"**. 
+   You'll get a code to enter on GitHub.com to authorize the extension. This uses GitHub's Device Flow - 
+   no OAuth app creation needed!
+2. **Select a repository:** After signing in, click **"Load My Repositories"** to see all repositories 
+   you have access to. Choose one from the dropdown or manually enter the owner/repo. You can also set 
+   default labels to apply to all issues.
 3. When you encounter a problem on a web page, right-click and choose **Create GitHub Issue from
    Page/Selection**. The extension captures the current URL, selected text, surrounding HTML, nearby
    script content, and the most recent JavaScript error (if one was recorded).
 4. The browser action popup shows the captured context, lets you edit the issue title and body, and
    submit the issue directly to GitHub. After submission the popup links to the newly created issue.
 
+> **Alternative:** You can also sign in using a Personal Access Token instead of the Device Flow. 
+> Create one at [github.com/settings/tokens](https://github.com/settings/tokens/new) with `repo` scope 
+> and enter it in the Options page.
+
 ## Permissions and privacy
 
-- `identity` – required for `chrome.identity.launchWebAuthFlow`.
 - `contextMenus` – adds the “Create GitHub Issue from Page/Selection” menu item.
 - `activeTab` and `scripting` – used to communicate with the active tab and collect context.
 - `storage` – stores OAuth tokens, repository defaults, and captured context.
