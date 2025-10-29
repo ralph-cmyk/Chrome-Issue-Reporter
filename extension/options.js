@@ -193,13 +193,25 @@ async function refreshAuthState() {
 
   const response = await chrome.runtime.sendMessage({ type: 'getAuthState' });
   if (response?.success && response.authenticated) {
-    oauthSignIn.textContent = '🔐 Re-authenticate with GitHub';
+    oauthSignIn.textContent = '🔄 Re-authenticate with GitHub';
+    oauthSignIn.classList.remove('primary');
+    oauthSignIn.classList.add('secondary');
     signOut.disabled = false;
     fetchRepos.disabled = false;
+    
+    if (!document.getElementById('status').textContent) {
+      setStatus('✅ You are authenticated with GitHub!\n\n💡 Configure your default repository below.', 'success');
+    }
   } else {
     oauthSignIn.textContent = '🔐 Sign in with GitHub';
+    oauthSignIn.classList.remove('secondary');
+    oauthSignIn.classList.add('primary');
     signOut.disabled = true;
     fetchRepos.disabled = true;
+    
+    if (!document.getElementById('status').textContent) {
+      setStatus('⚠️ Not authenticated\n\n🔐 Please sign in with GitHub to get started.', 'info');
+    }
   }
 }
 

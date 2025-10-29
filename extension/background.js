@@ -264,13 +264,15 @@ async function pollForDeviceToken(deviceCode, interval = 5) {
         })
       });
       
-      if (!response.ok) {
-        throw new Error('Token request failed');
+      const data = await safeParseJson(response);
+      
+      if (!response.ok && !data) {
+        // Network or parsing error - continue polling
+        console.warn('Token request failed, retrying...', response.status);
+        continue;
       }
       
-      const data = await response.json();
-      
-      if (data.error) {
+      if (data && data.error) {
         // Check for specific error types
         if (data.error === 'authorization_pending') {
           // User hasn't completed authorization yet, continue polling
@@ -280,29 +282,38 @@ async function pollForDeviceToken(deviceCode, interval = 5) {
           interval += 5;
           continue;
         } else if (data.error === 'expired_token') {
-          throw new Error('The device code has expired. Please try again.');
+          throw new Error('The device code has expired. Please try signing in again.');
         } else if (data.error === 'access_denied') {
-          throw new Error('Authorization was denied.');
+          throw new Error('Authorization was denied. Please try again if this was a mistake.');
         } else {
           throw new Error(data.error_description || data.error);
         }
       }
       
-      if (data.access_token) {
+      if (data && data.access_token) {
         // Success! Save the token
         await saveToken(data.access_token);
         return { success: true, token: data.access_token };
       }
     } catch (error) {
-      if (attempts >= maxAttempts) {
-        throw new Error('Timeout waiting for authorization');
+      // If it's a known error (expired, denied, etc.), throw it immediately
+      if (error.message && (
+        error.message.includes('expired') ||
+        error.message.includes('denied') ||
+        error.message.includes('error_description')
+      )) {
+        throw error;
       }
-      // Continue polling on transient errors
-      console.warn('Polling attempt failed:', error);
+      
+      // For other errors, continue polling unless we've hit max attempts
+      if (attempts >= maxAttempts) {
+        throw new Error('Timeout waiting for authorization. Please try again.');
+      }
+      console.warn('Polling attempt failed, retrying...', error.message);
     }
   }
   
-  throw new Error('Timeout waiting for authorization');
+  throw new Error('Timeout waiting for authorization. Please try again.');
 }
 
 function sleep(ms) {
