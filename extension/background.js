@@ -1,9 +1,16 @@
+import { generateCodeVerifier, generateCodeChallenge } from './pkce.js';
+
 const TOKEN_KEY = 'github_token';
 const CONFIG_KEY = 'repo_config';
 const LAST_CONTEXT_KEY = 'last_context';
 const LAST_ISSUE_KEY = 'last_issue';
 const CONTEXT_MENU_ID = 'create-github-issue';
 const MAX_SNIPPET_LENGTH = 5 * 1024; // 5 KB
+
+// GitHub Device Flow Configuration
+const GITHUB_DEVICE_CODE_URL = 'https://github.com/login/device/code';
+const GITHUB_ACCESS_TOKEN_URL = 'https://github.com/login/oauth/access_token';
+const GITHUB_CLIENT_ID = 'Ov23liJyiD9bKVNz2X2w';
 
 chrome.runtime.onInstalled.addListener(async () => {
   await ensureContextMenu();
@@ -66,6 +73,36 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
         } catch (error) {
           console.error('Sign-in failed', error);
           sendResponse({ success: false, error: error.message || 'Sign-in failed' });
+        }
+        break;
+      }
+      case 'startDeviceFlow': {
+        try {
+          const result = await startDeviceFlow(message.scopes || 'repo');
+          sendResponse({ success: true, ...result });
+        } catch (error) {
+          console.error('Device flow failed', error);
+          sendResponse({ success: false, error: error.message || 'Device flow failed' });
+        }
+        break;
+      }
+      case 'pollDeviceToken': {
+        try {
+          const result = await pollForDeviceToken(message.deviceCode, message.interval);
+          sendResponse({ success: true, ...result });
+        } catch (error) {
+          console.error('Token polling failed', error);
+          sendResponse({ success: false, error: error.message || 'Token polling failed' });
+        }
+        break;
+      }
+      case 'fetchRepos': {
+        try {
+          const repos = await fetchUserRepos();
+          sendResponse({ success: true, repos });
+        } catch (error) {
+          console.error('Failed to fetch repos', error);
+          sendResponse({ success: false, error: error.message || 'Failed to fetch repositories' });
         }
         break;
       }
@@ -208,6 +245,150 @@ async function signIn(token) {
   
   await saveToken(trimmedToken);
   return { success: true };
+}
+
+async function startDeviceFlow(scopes = 'repo') {
+  try {
+    // Step 1: Request device and user codes
+    const deviceCodeResponse = await fetch(GITHUB_DEVICE_CODE_URL, {
+      method: 'POST',
+      headers: {
+        'Accept': 'application/json',
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify({
+        client_id: GITHUB_CLIENT_ID,
+        scope: scopes
+      })
+    });
+    
+    if (!deviceCodeResponse.ok) {
+      throw new Error('Failed to initiate device flow');
+    }
+    
+    const deviceData = await deviceCodeResponse.json();
+    
+    if (deviceData.error) {
+      throw new Error(deviceData.error_description || deviceData.error);
+    }
+    
+    // Return device code data to show to user
+    return {
+      device_code: deviceData.device_code,
+      user_code: deviceData.user_code,
+      verification_uri: deviceData.verification_uri,
+      expires_in: deviceData.expires_in,
+      interval: deviceData.interval || 5
+    };
+  } catch (error) {
+    console.error('Device flow initiation failed:', error);
+    throw error;
+  }
+}
+
+async function pollForDeviceToken(deviceCode, interval = 5) {
+  const maxAttempts = 60; // 5 minutes with 5 second intervals
+  let attempts = 0;
+  
+  while (attempts < maxAttempts) {
+    await sleep(interval * 1000);
+    attempts++;
+    
+    try {
+      const response = await fetch(GITHUB_ACCESS_TOKEN_URL, {
+        method: 'POST',
+        headers: {
+          'Accept': 'application/json',
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({
+          client_id: GITHUB_CLIENT_ID,
+          device_code: deviceCode,
+          grant_type: 'urn:ietf:params:oauth:grant-type:device_code'
+        })
+      });
+      
+      if (!response.ok) {
+        throw new Error('Token request failed');
+      }
+      
+      const data = await response.json();
+      
+      if (data.error) {
+        // Check for specific error types
+        if (data.error === 'authorization_pending') {
+          // User hasn't completed authorization yet, continue polling
+          continue;
+        } else if (data.error === 'slow_down') {
+          // GitHub is asking us to slow down, increase interval
+          interval += 5;
+          continue;
+        } else if (data.error === 'expired_token') {
+          throw new Error('The device code has expired. Please try again.');
+        } else if (data.error === 'access_denied') {
+          throw new Error('Authorization was denied.');
+        } else {
+          throw new Error(data.error_description || data.error);
+        }
+      }
+      
+      if (data.access_token) {
+        // Success! Save the token
+        await saveToken(data.access_token);
+        return { success: true, token: data.access_token };
+      }
+    } catch (error) {
+      if (attempts >= maxAttempts) {
+        throw new Error('Timeout waiting for authorization');
+      }
+      // Continue polling on transient errors
+      console.warn('Polling attempt failed:', error);
+    }
+  }
+  
+  throw new Error('Timeout waiting for authorization');
+}
+
+function sleep(ms) {
+  return new Promise(resolve => setTimeout(resolve, ms));
+}
+
+async function fetchUserRepos() {
+  const token = await getStoredToken();
+  if (!token) {
+    throw new Error('Authentication required.');
+  }
+  
+  try {
+    const response = await fetch('https://api.github.com/user/repos?per_page=100&sort=updated', {
+      headers: {
+        Authorization: `token ${token}`,
+        Accept: 'application/vnd.github+json',
+        'X-GitHub-Api-Version': '2022-11-28'
+      }
+    });
+    
+    if (!response.ok) {
+      if (response.status === 401) {
+        await clearStoredToken();
+        throw new Error('Authentication expired. Please sign in again.');
+      }
+      throw new Error(`Failed to fetch repositories: ${response.status}`);
+    }
+    
+    const repos = await response.json();
+    return repos.map(repo => ({
+      id: repo.id,
+      name: repo.name,
+      full_name: repo.full_name,
+      owner: repo.owner.login,
+      private: repo.private,
+      permissions: repo.permissions
+    }));
+  } catch (error) {
+    console.error('Error fetching repos:', error);
+    throw error;
+  }
 }
 
 async function createIssue(payload = {}) {
