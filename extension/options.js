@@ -24,17 +24,16 @@ async function handleOAuthSignIn() {
       '⚠️ You must configure your GitHub OAuth App Client ID before signing in.\n\n' +
       '📋 Steps:\n' +
       '1. Create a GitHub OAuth App at https://github.com/settings/developers\n' +
-      '2. Enable Device Flow in the OAuth App settings\n' +
-      '3. Enter your Client ID in the field above\n' +
-      '4. Click "Save OAuth Configuration"\n' +
-      '5. Then try signing in again\n\n' +
-      'See SETUP-DEVICE-FLOW.md for detailed instructions.', 'error');
+      '2. Enter your Client ID in the field above\n' +
+      '3. Click "Save OAuth Configuration"\n' +
+      '4. Then try signing in again\n\n' +
+      'See INSTALL.md for detailed instructions.', 'error');
     return;
   }
   
   button.disabled = true;
   button.classList.add('loading');
-  setStatus('🔄 Starting GitHub Device Flow...', 'info');
+  setStatus('🔄 Starting GitHub OAuth flow...', 'info');
   
   try {
     // Step 1: Start device flow

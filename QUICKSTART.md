@@ -23,18 +23,15 @@ Unzip the file to a **permanent location** (e.g., `Documents/ChromeExtensions/`)
 
 ## ⚙️ Configuration (5 minutes)
 
-### Step 1: Create GitHub OAuth App with Device Flow
+### Step 1: Create GitHub OAuth App
 1. Go to: https://github.com/settings/developers
 2. Click **New OAuth App**
 3. Fill in:
    - **Name:** Chrome Issue Reporter
    - **Homepage:** https://github.com/ralph-cmyk/Chrome-Issue-Reporter
-   - **Callback URL:** `http://localhost` (required but not used for Device Flow)
+   - **Callback URL:** `http://localhost` (required by GitHub)
 4. Click **Register application**
-5. **⚠️ IMPORTANT:** After creation, open the app settings again
-6. Scroll down and **check "Enable Device Flow"** ✅
-7. Click **Update application**
-8. Copy your **Client ID** (starts with "Ov23...")
+5. Copy your **Client ID** (starts with "Ov23...")
 
 ### Step 2: Configure Extension
 1. Open the extracted extension folder

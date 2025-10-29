@@ -1,7 +1,7 @@
 # Chrome Issue Reporter
 
 A Chrome extension (Manifest V3) that captures the current page context and helps you file GitHub
-issues without leaving the browser. The extension uses GitHub's Device Flow for authentication,
+issues without leaving the browser. The extension uses GitHub OAuth for authentication,
 stores tokens securely in `chrome.storage.sync`, and submits issues via the GitHub REST API.
 
 ## 🚀 Quick Installation
@@ -12,10 +12,9 @@ stores tokens securely in `chrome.storage.sync`, and submits issues via the GitH
    - ⚠️ **Important:** Download the `-extension.zip` file, NOT the "Source code" archives!
 2. **Extract:** Unzip to a permanent location on your computer
 3. **Install:** Open `chrome://extensions/`, enable Developer mode, click "Load unpacked", and select the extracted folder
-4. **⚠️ REQUIRED Setup:** You must create a GitHub OAuth App and enable Device Flow - see [SETUP-DEVICE-FLOW.md](SETUP-DEVICE-FLOW.md) for detailed instructions
+4. **Configure:** Create a GitHub OAuth App and configure the extension with your Client ID
 
 📖 **For detailed step-by-step instructions, see [INSTALL.md](INSTALL.md)**  
-🔐 **For OAuth Device Flow setup, see [SETUP-DEVICE-FLOW.md](SETUP-DEVICE-FLOW.md)**  
 ⚡ **For a quick 7-minute setup guide, see [QUICKSTART.md](QUICKSTART.md)**
 
 ## How It Works
@@ -37,7 +36,7 @@ stores tokens securely in `chrome.storage.sync`, and submits issues via the GitH
 Chrome-Issue-Reporter/
 ├── extension/              # Extension source files
 │   ├── manifest.json      # Extension manifest (V3)
-│   ├── background.js      # Service worker, Device Flow auth, GitHub API
+│   ├── background.js      # Service worker, OAuth auth, GitHub API
 │   ├── content.js         # Page context capture
 │   ├── options.html       # Extension options page
 │   ├── options.js         # Options page logic
@@ -57,13 +56,13 @@ Chrome-Issue-Reporter/
 After installation, you need to configure the extension:
 
 1. **Create a GitHub OAuth App (REQUIRED):**
-   - This extension uses GitHub's Device Flow for authentication
-   - You MUST create an OAuth App with Device Flow enabled
+   - This extension uses GitHub OAuth for authentication
+   - You MUST create an OAuth App
    - See [INSTALL.md](INSTALL.md) for step-by-step instructions
 
 2. **Sign in with GitHub:**
    - Open the extension's **Options** page
-   - Click **"Sign in with GitHub"** to start the Device Flow
+   - Click **"Sign in with GitHub"** to start the OAuth flow
    - You'll receive a code to enter on GitHub.com
    - After authorization, you're ready to go!
 
@@ -78,13 +77,10 @@ After installation, you need to configure the extension:
 
 📖 **See [INSTALL.md](INSTALL.md) for detailed setup instructions**
 
-> **Note:** This extension uses GitHub's Device Flow for authentication. While Device Flow doesn't require a callback URL, you still need to create a GitHub OAuth App and enable Device Flow in its settings.
-
 ## Using the extension
 
 1. **Sign in with GitHub:** Open the extension's **Options** page and click **"Sign in with GitHub"**. 
-   You'll get a code to enter on GitHub.com to authorize the extension. This uses GitHub's Device Flow - 
-   no OAuth app creation needed!
+   You'll get a code to enter on GitHub.com to authorize the extension.
 2. **Select a repository:** After signing in, click **"Load My Repositories"** to see all repositories 
    you have access to. Choose one from the dropdown or manually enter the owner/repo. You can also set 
    default labels to apply to all issues.
@@ -101,7 +97,7 @@ After installation, you need to configure the extension:
 - `activeTab` and `scripting` – used to communicate with the active tab and collect context.
 - `storage` – stores OAuth tokens, repository defaults, and captured context.
 - Host permission `https://api.github.com/*` – required to create issues via the GitHub API.
-- Host permission `https://github.com/login/*` – required for OAuth Device Flow authentication.
+- Host permission `https://github.com/login/*` – required for OAuth authentication.
 
 Captured page context (URL, selection, snippets, and last error message) is stored locally until you
 submit or clear it. OAuth tokens are only stored inside Chrome’s managed storage. No data is sent to

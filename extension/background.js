@@ -6,7 +6,7 @@ const LAST_ISSUE_KEY = 'last_issue';
 const CONTEXT_MENU_ID = 'create-github-issue';
 const MAX_SNIPPET_LENGTH = 5 * 1024; // 5 KB
 
-// GitHub Device Flow Configuration
+// GitHub OAuth Configuration
 const GITHUB_DEVICE_CODE_URL = 'https://github.com/login/device/code';
 const GITHUB_ACCESS_TOKEN_URL = 'https://github.com/login/oauth/access_token';
 // DEPRECATED: Client ID is now configured by the user in options
@@ -245,11 +245,10 @@ async function startDeviceFlow(scopes = 'repo') {
         'Steps:\n' +
         '1. Go to https://github.com/settings/developers\n' +
         '2. Create a new OAuth App (or use existing)\n' +
-        '3. Enable Device Flow in the OAuth App settings\n' +
-        '4. Copy the Client ID\n' +
-        '5. Enter it in the extension options\n' +
-        '6. Save and try again\n\n' +
-        'See SETUP-DEVICE-FLOW.md for detailed instructions.'
+        '3. Copy the Client ID\n' +
+        '4. Enter it in the extension options\n' +
+        '5. Save and try again\n\n' +
+        'See INSTALL.md for detailed instructions.'
       );
     }
     
@@ -275,15 +274,13 @@ async function startDeviceFlow(scopes = 'repo') {
         throw new Error(
           `OAuth App not configured correctly!\n\n` +
           `Common causes:\n` +
-          `1. Device Flow is not enabled in your GitHub OAuth App\n` +
-          `2. The Client ID in background.js is incorrect\n` +
-          `3. The OAuth App doesn't exist\n\n` +
+          `1. The Client ID is incorrect\n` +
+          `2. The OAuth App doesn't exist\n\n` +
           `To fix:\n` +
           `1. Go to ${setupUrl}\n` +
           `2. Open your OAuth App settings\n` +
-          `3. Enable "Device Flow" checkbox\n` +
-          `4. Update GITHUB_CLIENT_ID in background.js\n` +
-          `5. Reload the extension\n\n` +
+          `3. Update Client ID in the extension options\n` +
+          `4. Reload the extension\n\n` +
           `See INSTALL.md for detailed instructions.`
         );
       }
