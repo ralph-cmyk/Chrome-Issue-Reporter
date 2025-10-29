@@ -144,10 +144,9 @@ Consider creating a formal design system:
 ## 🐛 Known Issues & Edge Cases
 
 1. **Large Context**: Very large HTML snippets might hit API limits
-2. **Rate Limiting**: Multiple rapid submissions could hit rate limits
-3. **Token Expiry**: No automatic refresh of expired tokens
-4. **Network Errors**: Limited retry logic for network failures
-5. **Cross-Origin**: Some pages might block content script injection
+2. **Rate Limiting**: Multiple rapid submissions could hit rate limits  
+3. **Token Expiry**: Manual re-authentication required when token expires
+4. **Cross-Origin**: Some pages might block content script injection
 
 ## 📈 Success Metrics
 
