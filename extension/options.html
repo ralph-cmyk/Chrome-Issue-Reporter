@@ -265,19 +265,44 @@
         <h1>Settings</h1>
         <p class="subtitle">Configure your GitHub authentication and repository settings</p>
         
-        <div class="info-box">
-          <strong>🔑 Authentication Updated!</strong>
-          This extension uses GitHub's Device Flow for easy, secure authentication. 
-          Just click the button below - no OAuth app setup required!
-        </div>
-
         <h2>🔐 GitHub Authentication</h2>
         
         <div class="info-box">
-          <strong>🚀 Easy GitHub Device Flow</strong>
-          Click the button below to sign in with GitHub. You'll get a code to enter on 
-          GitHub.com - no OAuth app setup needed!
+          <strong>⚙️ OAuth App Setup Required</strong>
+          Before signing in, you must create a GitHub OAuth App and configure it below.
+          See <a href="https://github.com/ralph-cmyk/Chrome-Issue-Reporter/blob/main/SETUP-DEVICE-FLOW.md" target="_blank" class="link">SETUP-DEVICE-FLOW.md</a> for instructions.
         </div>
+        
+        <label for="client-id">GitHub OAuth App Client ID *</label>
+        <input 
+          id="client-id" 
+          name="client-id" 
+          type="text" 
+          placeholder="e.g. Ov23liYourClientIdHere" 
+        />
+        <p class="hint">
+          Required: Your GitHub OAuth App Client ID (starts with "Ov23"). 
+          Create one at <a href="https://github.com/settings/developers" target="_blank" class="link">github.com/settings/developers</a>
+        </p>
+        
+        <label for="client-secret">GitHub OAuth App Client Secret (Optional)</label>
+        <input 
+          id="client-secret" 
+          name="client-secret" 
+          type="password" 
+          placeholder="Optional for Device Flow" 
+        />
+        <p class="hint">
+          Optional: Client Secret is not required for Device Flow but can be stored for future use.
+        </p>
+        
+        <div class="actions">
+          <button id="save-oauth-config" type="button" class="primary">
+            💾 Save OAuth Configuration
+          </button>
+        </div>
+        
+        <div class="divider"></div>
         
         <div class="actions">
           <button id="oauth-signin" type="button" class="primary">
