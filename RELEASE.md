@@ -69,7 +69,7 @@ The automated workflow uses this template:
 4. **Enable** Developer mode (toggle in the top-right corner)
 5. **Click** "Load unpacked" and select the extracted folder
 
-📖 For detailed step-by-step instructions, see [INSTALL.md](https://github.com/REPO/blob/main/INSTALL.md)
+📖 For detailed step-by-step instructions, see [INSTALL.md](https://github.com/ralph-cmyk/Chrome-Issue-Reporter/blob/main/INSTALL.md)
 
 ### What's Included
 
@@ -86,7 +86,7 @@ After installation, configure the extension:
 3. Select your target repository
 4. Start creating issues!
 
-📖 See [QUICKSTART.md](https://github.com/REPO/blob/main/QUICKSTART.md) for a 7-minute setup guide
+📖 See [QUICKSTART.md](https://github.com/ralph-cmyk/Chrome-Issue-Reporter/blob/main/QUICKSTART.md) for a 7-minute setup guide
 ```
 
 ## Versioning
