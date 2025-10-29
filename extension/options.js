@@ -13,7 +13,10 @@ async function init() {
 document.addEventListener('DOMContentLoaded', init);
 
 async function handleOAuthSignIn() {
-  setStatus('🔄 Starting GitHub Device Flow...');
+  const button = document.getElementById('oauth-signin');
+  button.disabled = true;
+  button.classList.add('loading');
+  setStatus('🔄 Starting GitHub Device Flow...', 'info');
   
   try {
     // Step 1: Start device flow
@@ -23,24 +26,26 @@ async function handleOAuthSignIn() {
     });
     
     if (!response?.success) {
-      setStatus('❌ ' + (response?.error || 'Device flow failed.'));
+      setStatus('❌ Failed to start device flow\n\n' + (response?.error || 'Unknown error'), 'error');
       return;
     }
     
     const { user_code, verification_uri, device_code, interval } = response;
     
     // Step 2: Show the code to the user and open GitHub
-    const message = `
-Please authorize this extension:
+    const message = `✅ Device flow started successfully!
 
-1. Your code: ${user_code}
-2. Visit: ${verification_uri}
-3. Enter the code above
+🔑 Your verification code: ${user_code}
 
-This page will open automatically. Waiting for authorization...
-    `;
+📋 Instructions:
+1. A new tab will open to GitHub
+2. Enter the code: ${user_code}
+3. Authorize the extension
+4. Return to this page
+
+⏳ Waiting for your authorization...`;
     
-    setStatus(message);
+    setStatus(message, 'info');
     
     // Open GitHub authorization page
     chrome.tabs.create({ url: verification_uri });
@@ -53,23 +58,29 @@ This page will open automatically. Waiting for authorization...
     });
     
     if (pollResponse?.success) {
-      setStatus('✅ Successfully signed in with GitHub!');
+      setStatus('✅ Successfully signed in with GitHub!\n\n🎉 You can now configure your repository and start creating issues.', 'success');
       await refreshAuthState();
       // Automatically fetch repositories after successful auth
-      setTimeout(() => handleFetchRepos(), 500);
+      setTimeout(() => handleFetchRepos(), 1000);
     } else {
-      setStatus('❌ ' + (pollResponse?.error || 'Authorization failed.'));
+      setStatus('❌ Authorization failed\n\n' + (pollResponse?.error || 'Unknown error occurred'), 'error');
     }
   } catch (error) {
-    setStatus('❌ OAuth error: ' + error.message);
+    setStatus('❌ OAuth error\n\n' + error.message, 'error');
+  } finally {
+    button.disabled = false;
+    button.classList.remove('loading');
   }
 }
 
 async function handleFetchRepos() {
   const repoSelect = document.getElementById('repo-select');
   const repoSelectHint = document.getElementById('repo-select-hint');
+  const button = document.getElementById('fetch-repos');
   
-  setStatus('🔄 Loading repositories...');
+  button.disabled = true;
+  button.classList.add('loading');
+  setStatus('🔄 Loading your repositories from GitHub...', 'info');
   
   try {
     const response = await chrome.runtime.sendMessage({ type: 'fetchRepos' });
@@ -90,12 +101,15 @@ async function handleFetchRepos() {
       repoSelect.style.display = 'block';
       repoSelectHint.style.display = 'block';
       
-      setStatus(`✅ Loaded ${response.repos.length} repositories.`);
+      setStatus(`✅ Loaded ${response.repos.length} repositories successfully!\n\n📚 Select a repository from the dropdown below.`, 'success');
     } else {
-      setStatus('❌ ' + (response?.error || 'Failed to load repositories.'));
+      setStatus('❌ Failed to load repositories\n\n' + (response?.error || 'Unknown error occurred'), 'error');
     }
   } catch (error) {
-    setStatus('❌ Error loading repositories: ' + error.message);
+    setStatus('❌ Error loading repositories\n\n' + error.message, 'error');
+  } finally {
+    button.disabled = false;
+    button.classList.remove('loading');
   }
 }
 
@@ -107,7 +121,7 @@ async function handleRepoSelect() {
     const [owner, repo] = selectedFullName.split('/');
     document.getElementById('owner').value = owner || '';
     document.getElementById('repo').value = repo || '';
-    setStatus(`Selected: ${selectedFullName}`);
+    setStatus(`✅ Selected: ${selectedFullName}\n\n💡 Don't forget to click "Save Repository Settings" below!`, 'info');
   }
 }
 
@@ -136,26 +150,40 @@ async function handleSave() {
     .filter(Boolean);
 
   if (!owner || !repo) {
-    setStatus('⚠️ Repository owner and name are required.');
+    setStatus('⚠️ Missing required fields\n\nRepository owner and name are required.', 'error');
     return;
   }
+
+  const button = document.getElementById('save');
+  button.disabled = true;
+  button.classList.add('loading');
 
   const response = await chrome.runtime.sendMessage({
     type: 'saveConfig',
     config: { owner, repo, labels }
   });
 
+  button.disabled = false;
+  button.classList.remove('loading');
+
   if (response?.success) {
-    setStatus('✅ Repository settings saved.');
+    setStatus(`✅ Repository settings saved successfully!\n\n📂 ${owner}/${repo}\n🏷️ Labels: ${labels.length > 0 ? labels.join(', ') : 'None'}`, 'success');
   } else {
-    setStatus('❌ ' + (response?.error || 'Unable to save settings.'));
+    setStatus('❌ Unable to save settings\n\n' + (response?.error || 'Unknown error occurred'), 'error');
   }
 }
 
 async function handleSignOut() {
+  const button = document.getElementById('sign-out');
+  button.disabled = true;
+  button.classList.add('loading');
+  
   await chrome.runtime.sendMessage({ type: 'signOut' });
-  setStatus('✅ Signed out successfully.');
+  setStatus('✅ Signed out successfully!\n\n🔐 You can sign in again anytime using the button above.', 'success');
   await refreshAuthState();
+  
+  button.disabled = false;
+  button.classList.remove('loading');
 }
 
 async function refreshAuthState() {
@@ -218,7 +246,11 @@ function parseGitHubUrl(url) {
   return null;
 }
 
-function setStatus(message) {
+function setStatus(message, type = 'info') {
   const status = document.getElementById('status');
   status.textContent = message;
+  status.className = 'status ' + type;
+  if (message) {
+    status.style.display = 'block';
+  }
 }
