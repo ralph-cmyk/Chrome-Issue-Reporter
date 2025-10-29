@@ -41,6 +41,12 @@
       .status {
         margin-top: 16px;
         min-height: 1.2em;
+        white-space: pre-wrap;
+        font-family: monospace;
+        background: #f9f9f9;
+        padding: 12px;
+        border-radius: 4px;
+        border: 1px solid #ddd;
       }
       .hint {
         color: #555;
@@ -81,12 +87,12 @@
       <h2>1. GitHub Authentication</h2>
       
       <div class="info-box">
-        <strong>🚀 Easy OAuth Setup:</strong> Click the button below to sign in with GitHub using OAuth. 
-        No manual token creation needed!
+        <strong>🚀 Easy GitHub Device Flow:</strong> Click the button below to sign in with GitHub. 
+        You'll get a code to enter on GitHub.com - no OAuth app setup needed!
       </div>
       
       <div class="actions">
-        <button id="oauth-signin" type="button">🔐 Sign in with GitHub OAuth</button>
+        <button id="oauth-signin" type="button">🔐 Sign in with GitHub</button>
         <button id="sign-out" type="button">Sign out (Clear Token)</button>
       </div>
       

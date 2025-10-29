@@ -14,21 +14,52 @@ async function init() {
 document.addEventListener('DOMContentLoaded', init);
 
 async function handleOAuthSignIn() {
-  setStatus('🔄 Starting OAuth flow...');
+  setStatus('🔄 Starting GitHub Device Flow...');
   
   try {
+    // Step 1: Start device flow
     const response = await chrome.runtime.sendMessage({ 
-      type: 'startOAuth',
+      type: 'startDeviceFlow',
       scopes: 'repo'
     });
     
-    if (response?.success) {
-      setStatus('✅ Successfully signed in with GitHub OAuth!');
+    if (!response?.success) {
+      setStatus('❌ ' + (response?.error || 'Device flow failed.'));
+      return;
+    }
+    
+    const { user_code, verification_uri, device_code, interval } = response;
+    
+    // Step 2: Show the code to the user and open GitHub
+    const message = `
+Please authorize this extension:
+
+1. Your code: ${user_code}
+2. Visit: ${verification_uri}
+3. Enter the code above
+
+This page will open automatically. Waiting for authorization...
+    `;
+    
+    setStatus(message);
+    
+    // Open GitHub authorization page
+    chrome.tabs.create({ url: verification_uri });
+    
+    // Step 3: Poll for token
+    const pollResponse = await chrome.runtime.sendMessage({
+      type: 'pollDeviceToken',
+      deviceCode: device_code,
+      interval: interval
+    });
+    
+    if (pollResponse?.success) {
+      setStatus('✅ Successfully signed in with GitHub!');
       await refreshAuthState();
-      // Automatically fetch repositories after successful OAuth
+      // Automatically fetch repositories after successful auth
       setTimeout(() => handleFetchRepos(), 500);
     } else {
-      setStatus('❌ ' + (response?.error || 'OAuth sign-in failed.'));
+      setStatus('❌ ' + (pollResponse?.error || 'Authorization failed.'));
     }
   } catch (error) {
     setStatus('❌ OAuth error: ' + error.message);
@@ -161,13 +192,13 @@ async function refreshAuthState() {
 
   const response = await chrome.runtime.sendMessage({ type: 'getAuthState' });
   if (response?.success && response.authenticated) {
-    oauthSignIn.textContent = '🔐 Re-authenticate with OAuth';
+    oauthSignIn.textContent = '🔐 Re-authenticate with GitHub';
     signIn.textContent = 'Update Token';
     signOut.disabled = false;
     fetchRepos.disabled = false;
     tokenInput.placeholder = 'Enter new token to update...';
   } else {
-    oauthSignIn.textContent = '🔐 Sign in with GitHub OAuth';
+    oauthSignIn.textContent = '🔐 Sign in with GitHub';
     signIn.textContent = 'Save & Validate Token';
     signOut.disabled = true;
     fetchRepos.disabled = true;

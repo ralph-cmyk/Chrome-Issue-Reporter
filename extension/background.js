@@ -7,10 +7,10 @@ const LAST_ISSUE_KEY = 'last_issue';
 const CONTEXT_MENU_ID = 'create-github-issue';
 const MAX_SNIPPET_LENGTH = 5 * 1024; // 5 KB
 
-// OAuth Configuration
-const OAUTH_CLIENT_ID = 'Ov23liJyiD9bKVNz2X2w';
-const OAUTH_AUTHORIZE_URL = 'https://github.com/login/oauth/authorize';
-const OAUTH_TOKEN_URL = 'https://github.com/login/oauth/access_token';
+// GitHub Device Flow Configuration
+const GITHUB_DEVICE_CODE_URL = 'https://github.com/login/device/code';
+const GITHUB_ACCESS_TOKEN_URL = 'https://github.com/login/oauth/access_token';
+const GITHUB_CLIENT_ID = 'Ov23liJyiD9bKVNz2X2w';
 
 chrome.runtime.onInstalled.addListener(async () => {
   await ensureContextMenu();
@@ -76,13 +76,23 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
         }
         break;
       }
-      case 'startOAuth': {
+      case 'startDeviceFlow': {
         try {
-          const result = await startOAuthFlow(message.scopes || 'repo');
+          const result = await startDeviceFlow(message.scopes || 'repo');
           sendResponse({ success: true, ...result });
         } catch (error) {
-          console.error('OAuth flow failed', error);
-          sendResponse({ success: false, error: error.message || 'OAuth flow failed' });
+          console.error('Device flow failed', error);
+          sendResponse({ success: false, error: error.message || 'Device flow failed' });
+        }
+        break;
+      }
+      case 'pollDeviceToken': {
+        try {
+          const result = await pollForDeviceToken(message.deviceCode, message.interval);
+          sendResponse({ success: true, ...result });
+        } catch (error) {
+          console.error('Token polling failed', error);
+          sendResponse({ success: false, error: error.message || 'Token polling failed' });
         }
         break;
       }
@@ -237,100 +247,110 @@ async function signIn(token) {
   return { success: true };
 }
 
-async function startOAuthFlow(scopes = 'repo') {
+async function startDeviceFlow(scopes = 'repo') {
   try {
-    const redirectUrl = chrome.identity.getRedirectURL();
-    const codeVerifier = generateCodeVerifier();
-    const codeChallenge = await generateCodeChallenge(codeVerifier);
-    const state = generateRandomState();
-    
-    // Store code verifier and state for later verification
-    await chrome.storage.local.set({
-      oauth_code_verifier: codeVerifier,
-      oauth_state: state
+    // Step 1: Request device and user codes
+    const deviceCodeResponse = await fetch(GITHUB_DEVICE_CODE_URL, {
+      method: 'POST',
+      headers: {
+        'Accept': 'application/json',
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify({
+        client_id: GITHUB_CLIENT_ID,
+        scope: scopes
+      })
     });
     
-    const authUrl = new URL(OAUTH_AUTHORIZE_URL);
-    authUrl.searchParams.set('client_id', OAUTH_CLIENT_ID);
-    authUrl.searchParams.set('redirect_uri', redirectUrl);
-    authUrl.searchParams.set('scope', scopes);
-    authUrl.searchParams.set('state', state);
-    authUrl.searchParams.set('code_challenge', codeChallenge);
-    authUrl.searchParams.set('code_challenge_method', 'S256');
-    
-    const responseUrl = await chrome.identity.launchWebAuthFlow({
-      url: authUrl.toString(),
-      interactive: true
-    });
-    
-    if (!responseUrl) {
-      throw new Error('OAuth flow was cancelled or failed.');
+    if (!deviceCodeResponse.ok) {
+      throw new Error('Failed to initiate device flow');
     }
     
-    const params = new URL(responseUrl).searchParams;
-    const code = params.get('code');
-    const returnedState = params.get('state');
+    const deviceData = await deviceCodeResponse.json();
     
-    if (!code) {
-      throw new Error('No authorization code received.');
+    if (deviceData.error) {
+      throw new Error(deviceData.error_description || deviceData.error);
     }
     
-    // Verify state
-    const stored = await chrome.storage.local.get(['oauth_state']);
-    if (returnedState !== stored.oauth_state) {
-      throw new Error('Invalid state parameter. Possible CSRF attack.');
-    }
-    
-    // Exchange code for token
-    const token = await exchangeCodeForToken(code, codeVerifier, redirectUrl);
-    
-    // Clean up temporary storage
-    await chrome.storage.local.remove(['oauth_code_verifier', 'oauth_state']);
-    
-    // Save token
-    await saveToken(token);
-    
-    return { success: true, token };
+    // Return device code data to show to user
+    return {
+      device_code: deviceData.device_code,
+      user_code: deviceData.user_code,
+      verification_uri: deviceData.verification_uri,
+      expires_in: deviceData.expires_in,
+      interval: deviceData.interval || 5
+    };
   } catch (error) {
-    // Clean up on error
-    await chrome.storage.local.remove(['oauth_code_verifier', 'oauth_state']);
+    console.error('Device flow initiation failed:', error);
     throw error;
   }
 }
 
-async function exchangeCodeForToken(code, codeVerifier, redirectUri) {
-  const response = await fetch(OAUTH_TOKEN_URL, {
-    method: 'POST',
-    headers: {
-      'Accept': 'application/json',
-      'Content-Type': 'application/json'
-    },
-    body: JSON.stringify({
-      client_id: OAUTH_CLIENT_ID,
-      code: code,
-      redirect_uri: redirectUri,
-      code_verifier: codeVerifier
-    })
-  });
+async function pollForDeviceToken(deviceCode, interval = 5) {
+  const maxAttempts = 60; // 5 minutes with 5 second intervals
+  let attempts = 0;
   
-  if (!response.ok) {
-    const error = await safeParseJson(response);
-    throw new Error(error?.error_description || 'Failed to exchange code for token');
+  while (attempts < maxAttempts) {
+    await sleep(interval * 1000);
+    attempts++;
+    
+    try {
+      const response = await fetch(GITHUB_ACCESS_TOKEN_URL, {
+        method: 'POST',
+        headers: {
+          'Accept': 'application/json',
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({
+          client_id: GITHUB_CLIENT_ID,
+          device_code: deviceCode,
+          grant_type: 'urn:ietf:params:oauth:grant-type:device_code'
+        })
+      });
+      
+      if (!response.ok) {
+        throw new Error('Token request failed');
+      }
+      
+      const data = await response.json();
+      
+      if (data.error) {
+        // Check for specific error types
+        if (data.error === 'authorization_pending') {
+          // User hasn't completed authorization yet, continue polling
+          continue;
+        } else if (data.error === 'slow_down') {
+          // GitHub is asking us to slow down, increase interval
+          interval += 5;
+          continue;
+        } else if (data.error === 'expired_token') {
+          throw new Error('The device code has expired. Please try again.');
+        } else if (data.error === 'access_denied') {
+          throw new Error('Authorization was denied.');
+        } else {
+          throw new Error(data.error_description || data.error);
+        }
+      }
+      
+      if (data.access_token) {
+        // Success! Save the token
+        await saveToken(data.access_token);
+        return { success: true, token: data.access_token };
+      }
+    } catch (error) {
+      if (attempts >= maxAttempts) {
+        throw new Error('Timeout waiting for authorization');
+      }
+      // Continue polling on transient errors
+      console.warn('Polling attempt failed:', error);
+    }
   }
   
-  const data = await response.json();
-  
-  if (data.error) {
-    throw new Error(data.error_description || data.error);
-  }
-  
-  return data.access_token;
+  throw new Error('Timeout waiting for authorization');
 }
 
-function generateRandomState() {
-  const array = new Uint8Array(32);
-  crypto.getRandomValues(array);
-  return Array.from(array, byte => byte.toString(16).padStart(2, '0')).join('');
+function sleep(ms) {
+  return new Promise(resolve => setTimeout(resolve, ms));
 }
 
 async function fetchUserRepos() {
