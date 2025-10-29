@@ -8,6 +8,10 @@ const MAX_SNIPPET_LENGTH = 5 * 1024; // 5 KB
 // GitHub Device Flow Configuration
 const GITHUB_DEVICE_CODE_URL = 'https://github.com/login/device/code';
 const GITHUB_ACCESS_TOKEN_URL = 'https://github.com/login/oauth/access_token';
+// IMPORTANT: Replace this with your own GitHub OAuth App Client ID
+// The app MUST have Device Flow enabled in GitHub settings
+// Create one at: https://github.com/settings/developers
+// See INSTALL.md for detailed instructions
 const GITHUB_CLIENT_ID = 'Ov23liJyiD9bKVNz2X2w';
 
 chrome.runtime.onInstalled.addListener(async () => {
@@ -217,6 +221,26 @@ async function startDeviceFlow(scopes = 'repo') {
     
     if (!deviceCodeResponse.ok) {
       const errorData = await safeParseJson(deviceCodeResponse);
+      
+      // Provide helpful error message for 404 (most common issue)
+      if (deviceCodeResponse.status === 404) {
+        const setupUrl = 'https://github.com/settings/developers';
+        throw new Error(
+          `OAuth App not configured correctly!\n\n` +
+          `Common causes:\n` +
+          `1. Device Flow is not enabled in your GitHub OAuth App\n` +
+          `2. The Client ID in background.js is incorrect\n` +
+          `3. The OAuth App doesn't exist\n\n` +
+          `To fix:\n` +
+          `1. Go to ${setupUrl}\n` +
+          `2. Open your OAuth App settings\n` +
+          `3. Enable "Device Flow" checkbox\n` +
+          `4. Update GITHUB_CLIENT_ID in background.js\n` +
+          `5. Reload the extension\n\n` +
+          `See INSTALL.md for detailed instructions.`
+        );
+      }
+      
       const errorMessage = errorData?.error_description || errorData?.message || 
                           `Failed to initiate device flow (status: ${deviceCodeResponse.status})`;
       throw new Error(errorMessage);

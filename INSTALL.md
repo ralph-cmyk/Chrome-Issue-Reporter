@@ -98,49 +98,53 @@ Then follow [Method 1](#method-1-install-from-pre-built-zip-recommended) to inst
 
 ## Configuration
 
-After installation, you must configure the extension with your GitHub OAuth credentials:
+After installation, you must configure the extension with your GitHub OAuth App:
 
-### Step 1: Create a GitHub OAuth App
+### Step 1: Create a GitHub OAuth App with Device Flow
 
 1. Go to [GitHub Settings → Developer settings → OAuth Apps](https://github.com/settings/developers)
 2. Click **New OAuth App**
 3. Fill in the details:
    - **Application name:** Chrome Issue Reporter (or your preferred name)
-   - **Homepage URL:** `http://localhost` (or your preferred URL)
-   - **Authorization callback URL:** `https://<YOUR_EXTENSION_ID>.chromiumapp.org/`
-     - Replace `<YOUR_EXTENSION_ID>` with the ID from Step 4 above
+   - **Homepage URL:** `https://github.com/ralph-cmyk/Chrome-Issue-Reporter` (or your preferred URL)
+   - **Authorization callback URL:** `http://localhost` (This is not used for Device Flow but is required by GitHub)
 4. Click **Register application**
-5. Note your **Client ID**
+5. **IMPORTANT:** After creating the app, click on the app name to open its settings
+6. Scroll down and find the **"Enable Device Flow"** checkbox
+7. ✅ **Check "Enable Device Flow"** - This is REQUIRED for the extension to work!
+8. Click **Update application**
+9. Note your **Client ID** (starts with "Ov23...")
 
 ### Step 2: Update Extension Configuration
 
 1. Navigate to the extension folder (the one you installed)
 2. Open `background.js` in a text editor
-3. Update these constants:
+3. Find this line (line 15):
    ```javascript
-   const CLIENT_ID = 'your_github_client_id_here';
-   const REDIRECT_URI = 'https://YOUR_EXTENSION_ID.chromiumapp.org/';
-   const GITHUB_SCOPES = 'public_repo';  // or 'repo' for private repos
-   const DEFAULT_OWNER = 'your-github-username';
-   const DEFAULT_REPO = 'your-repo-name';
-   const DEFAULT_LABELS = ['bug'];  // or your preferred labels
+   const GITHUB_CLIENT_ID = 'Ov23liJyiD9bKVNz2X2w';
    ```
-4. Save the file
-5. Go to `chrome://extensions/` and click the **Reload** button for this extension
+4. Replace `'Ov23liJyiD9bKVNz2X2w'` with your own Client ID from Step 1
+5. Save the file
+6. Go to `chrome://extensions/` and click the **Reload** button for this extension
 
-### Step 3: Configure Options (Optional)
+### Step 3: Sign In with GitHub
 
-1. Right-click the extension icon in Chrome
-2. Select **Options**
-3. Update the default repository owner, repo name, and labels as needed
-4. Click **Save**
+1. Right-click the extension icon in Chrome and select **Options**
+2. Click **"Sign in with GitHub"**
+3. You'll see a verification code (e.g., "ABCD-1234")
+4. A new tab will open to GitHub's device authorization page
+5. Enter the verification code shown in the extension
+6. Click **Authorize** on GitHub
+7. Return to the extension options page - you should see a success message
 
-### Step 4: Sign In
+### Step 4: Configure Your Repository
 
-1. Click the extension icon in your Chrome toolbar
-2. Click **Sign in with GitHub**
-3. Follow the OAuth flow to authorize the extension
-4. Choose the scope (public_repo or repo) based on your needs
+1. After signing in, click **"Load My Repositories"** to fetch your repositories
+2. Select a repository from the dropdown, or manually enter:
+   - **Owner:** Your GitHub username or organization
+   - **Repo:** Your repository name
+   - **Labels:** (Optional) Comma-separated labels to add to issues
+3. Click **Save Repository Settings**
 
 ---
 
@@ -152,9 +156,16 @@ After installation, you must configure the extension with your GitHub OAuth cred
 - Check the Chrome developer console for errors
 
 ### OAuth errors
-- Verify your `CLIENT_ID` is correct
-- Ensure the `REDIRECT_URI` matches your extension ID exactly
-- Make sure your GitHub OAuth App has the correct callback URL
+- **"404 Not Found" or "Failed to start device flow":**
+  - Your OAuth App might not exist or the Client ID is incorrect
+  - Make sure you **enabled Device Flow** in your OAuth App settings (this is NOT enabled by default!)
+  - Verify your Client ID in `background.js` matches the one from your OAuth App
+  - Double-check that you created an **OAuth App** (not a GitHub App - they are different!)
+- **"Authorization pending" timeout:**
+  - Make sure you entered the verification code on GitHub within the time limit (usually 15 minutes)
+  - Check that you clicked "Authorize" on GitHub
+  - Try signing in again - you'll get a new verification code
+- For OAuth changes, you may need to sign out and sign in again
 
 ### Extension is disabled on restart
 - This is normal for unpacked extensions in Developer mode

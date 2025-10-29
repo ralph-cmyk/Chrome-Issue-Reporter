@@ -3,6 +3,13 @@
 ## Overview
 This document describes the GitHub Device Flow OAuth implementation in the Chrome Issue Reporter extension. This implementation ensures 100% working authentication with GitHub.
 
+**⚠️ CRITICAL SETUP REQUIREMENT:**
+Before using this extension, you MUST:
+1. Create a GitHub OAuth App at https://github.com/settings/developers
+2. **Enable Device Flow** in the OAuth App settings (this is NOT enabled by default!)
+3. Update the `GITHUB_CLIENT_ID` constant in `background.js` with your Client ID
+4. Without these steps, the OAuth flow will fail with a 404 error
+
 ## Why Device Flow?
 
 GitHub's Device Flow is perfect for browser extensions because:
@@ -372,6 +379,34 @@ Response:
 ```
 
 ## Troubleshooting Guide
+
+### Problem: Device flow doesn't start (404 error)
+**Symptoms**: Error message like "Failed to initiate device flow (status: 404)" or "error: Not Found"
+
+**Root Cause**: The GitHub OAuth App doesn't exist, the Client ID is wrong, or Device Flow is not enabled.
+
+**Solutions**:
+1. **Verify you created an OAuth App** (not a GitHub App - they're different!)
+   - Go to https://github.com/settings/developers
+   - You should see your app listed under "OAuth Apps"
+2. **Check that Device Flow is enabled:**
+   - Click on your OAuth App name
+   - Scroll down to find "Enable Device Flow" checkbox
+   - ✅ Make sure it's checked (this is NOT enabled by default!)
+   - Click "Update application" if you made changes
+3. **Verify your Client ID:**
+   - Copy the Client ID from your OAuth App settings
+   - Open `background.js` in your extension folder
+   - Confirm the `GITHUB_CLIENT_ID` constant matches exactly
+   - Reload the extension in `chrome://extensions/`
+4. **Test the endpoint manually** (optional):
+   ```bash
+   curl -X POST https://github.com/login/device/code \
+     -H "Accept: application/json" \
+     -H "Content-Type: application/x-www-form-urlencoded" \
+     -d "client_id=YOUR_CLIENT_ID&scope=repo"
+   ```
+   If this returns a 404, your OAuth App or Device Flow isn't set up correctly.
 
 ### Problem: Device flow doesn't start
 **Solutions**:
