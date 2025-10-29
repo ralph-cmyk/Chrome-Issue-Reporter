@@ -19,13 +19,15 @@ This is the easiest method if you have a pre-built ZIP file of the extension.
 
 **Option A: From GitHub Releases**
 1. Go to the [Releases page](https://github.com/ralph-cmyk/Chrome-Issue-Reporter/releases)
-2. Download the latest `chrome-issue-reporter.zip` file
+2. Download the latest `chrome-issue-reporter-extension.zip` file
+   - ⚠️ **IMPORTANT:** Download the file named `chrome-issue-reporter-extension.zip`
+   - ❌ **DO NOT** download "Source code (zip)" or "Source code (tar.gz)" - these will NOT work!
 
 **Option B: From a Direct Link**
-- If someone provided you with a `chrome-issue-reporter.zip` file, save it to your computer
+- If someone provided you with a `chrome-issue-reporter-extension.zip` file, save it to your computer
 
 ### Step 2: Extract the ZIP File
-1. Right-click on `chrome-issue-reporter.zip`
+1. Right-click on `chrome-issue-reporter-extension.zip`
 2. Select "Extract All..." (Windows) or double-click (Mac)
 3. Choose a permanent location for the extension folder (e.g., `Documents/ChromeExtensions/`)
 4. **Important:** Do NOT delete this folder after installation - Chrome needs it to run the extension
@@ -81,13 +83,13 @@ If you want to create your own distributable ZIP file:
 npm run package
 ```
 
-This will create `chrome-issue-reporter.zip` ready for distribution.
+This will create `chrome-issue-reporter-extension.zip` ready for distribution.
 
 ### Manual Packaging
 ```bash
 # From the repository root
 cd extension
-zip -r ../chrome-issue-reporter.zip *
+zip -r ../chrome-issue-reporter-extension.zip *
 ```
 
 Then follow [Method 1](#method-1-install-from-pre-built-zip-recommended) to install.

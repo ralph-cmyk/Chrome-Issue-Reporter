@@ -9,7 +9,8 @@ issues via the GitHub REST API.
 
 **Want to install this extension? It's easy!**
 
-1. **Download:** Get the latest `chrome-issue-reporter.zip` from [Releases](https://github.com/ralph-cmyk/Chrome-Issue-Reporter/releases) or [build it yourself](#building-from-source)
+1. **Download:** Get the latest `chrome-issue-reporter-extension.zip` from [Releases](https://github.com/ralph-cmyk/Chrome-Issue-Reporter/releases) or [build it yourself](#building-from-source)
+   - ⚠️ **Important:** Download the `-extension.zip` file, NOT the "Source code" archives!
 2. **Extract:** Unzip to a permanent location on your computer
 3. **Install:** Open `chrome://extensions/`, enable Developer mode, click "Load unpacked", and select the extracted folder
 
@@ -119,7 +120,7 @@ cd Chrome-Issue-Reporter
 npm run package
 ```
 
-This creates `chrome-issue-reporter.zip` ready for distribution or installation.
+This creates `chrome-issue-reporter-extension.zip` ready for distribution or installation.
 
 ### Available Scripts
 - `npm run clean` - Remove build artifacts
@@ -130,7 +131,7 @@ This creates `chrome-issue-reporter.zip` ready for distribution or installation.
 If you don't have Node.js:
 ```bash
 cd extension
-zip -r ../chrome-issue-reporter.zip *
+zip -r ../chrome-issue-reporter-extension.zip *
 ```
 
 ## For Developers

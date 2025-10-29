@@ -5,7 +5,9 @@ Get started with Chrome Issue Reporter in just a few minutes!
 ## 📥 Installation (2 minutes)
 
 ### Step 1: Get the Extension
-Download `chrome-issue-reporter.zip` from [Releases](https://github.com/ralph-cmyk/Chrome-Issue-Reporter/releases)
+Download `chrome-issue-reporter-extension.zip` from [Releases](https://github.com/ralph-cmyk/Chrome-Issue-Reporter/releases)
+
+> ⚠️ **Important:** Download `chrome-issue-reporter-extension.zip`, NOT the source code archives!
 
 ### Step 2: Extract
 Unzip the file to a **permanent location** (e.g., `Documents/ChromeExtensions/`)
