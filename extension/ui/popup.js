@@ -37,16 +37,14 @@ async function refreshAuthState(preserveMessage = false) {
   
   if (response?.success && response.authenticated) {
     if (!preserveMessage) {
-      statusEl.textContent = 'Ready to create issues.';
+      setStatus('Ready to create issues.', 'info');
     }
-    authStatusEl.textContent = '✅ Authenticated';
-    authStatusEl.style.color = 'green';
+    authStatusEl.innerHTML = '<span class="badge success">✅ Authenticated</span>';
   } else {
     if (!preserveMessage) {
-      statusEl.textContent = 'Not authenticated. Configure in settings.';
+      setStatus('Not authenticated. Configure in settings.', 'error');
     }
-    authStatusEl.textContent = '⚠️ Not authenticated';
-    authStatusEl.style.color = 'orange';
+    authStatusEl.innerHTML = '<span class="badge warning">⚠️ Not authenticated</span>';
   }
 }
 
@@ -58,11 +56,9 @@ async function loadConfig() {
     defaultLabels = Array.isArray(response.config?.labels) ? response.config.labels : [];
     
     if (response.config?.owner && response.config?.repo) {
-      repoStatusEl.textContent = `📂 ${response.config.owner}/${response.config.repo}`;
-      repoStatusEl.style.color = 'green';
+      repoStatusEl.innerHTML = `<span class="badge success">📂 ${response.config.owner}/${response.config.repo}</span>`;
     } else {
-      repoStatusEl.textContent = '⚠️ Repository not configured';
-      repoStatusEl.style.color = 'orange';
+      repoStatusEl.innerHTML = '<span class="badge warning">⚠️ Repository not configured</span>';
     }
   }
 }
@@ -98,12 +94,12 @@ async function handleSubmit(event) {
   const title = titleInput.value.trim();
   const body = bodyInput.value;
   if (!title) {
-    setStatus('Title is required.');
+    setStatus('Title is required.', 'error');
     return;
   }
 
   setLoading(true);
-  setStatus('Creating issue…');
+  setStatus('Creating issue…', 'info');
   try {
     const response = await chrome.runtime.sendMessage({
       type: 'createIssue',
@@ -116,13 +112,13 @@ async function handleSubmit(event) {
 
     if (response?.success) {
       const issue = response.issue;
-      setStatus(`Issue created: #${issue.number}`);
-      lastIssueEl.innerHTML = `<a class="link" href="${issue.html_url}" target="_blank" rel="noreferrer">#${issue.number}</a>`;
+      setStatus(`✅ Issue #${issue.number} created successfully!`, 'success');
+      lastIssueEl.innerHTML = `<a href="${issue.html_url}" target="_blank" rel="noreferrer">🔗 View Issue #${issue.number}</a>`;
     } else {
-      setStatus(response?.error || 'Failed to create issue.');
+      setStatus('❌ ' + (response?.error || 'Failed to create issue.'), 'error');
     }
   } catch (error) {
-    setStatus(error.message || 'Failed to create issue.');
+    setStatus('❌ ' + (error.message || 'Failed to create issue.'), 'error');
   } finally {
     setLoading(false);
   }
@@ -134,7 +130,7 @@ async function handleClearContext() {
   contextPreviewEl.textContent = 'Context cleared.';
   bodyInput.value = '';
   titleInput.value = '';
-  setStatus('Context cleared.');
+  setStatus('🗑️ Context cleared.', 'info');
 }
 
 function buildDefaultTitle(context) {
@@ -206,11 +202,20 @@ function truncate(value) {
   return value.length > 200 ? `${value.slice(0, 200)}…` : value;
 }
 
-function setStatus(message) {
+function setStatus(message, type = 'info') {
   statusEl.textContent = message;
+  statusEl.className = 'status ' + type;
+  if (message) {
+    statusEl.style.display = 'block';
+  }
 }
 
 function setLoading(isLoading) {
   createButton.disabled = isLoading;
-  createButton.textContent = isLoading ? 'Creating…' : 'Create issue';
+  createButton.textContent = isLoading ? '⏳ Creating…' : '✨ Create Issue';
+  if (isLoading) {
+    createButton.classList.add('loading');
+  } else {
+    createButton.classList.remove('loading');
+  }
 }
