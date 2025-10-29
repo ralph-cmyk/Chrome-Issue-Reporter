@@ -1,9 +1,16 @@
+import { generateCodeVerifier, generateCodeChallenge } from './pkce.js';
+
 const TOKEN_KEY = 'github_token';
 const CONFIG_KEY = 'repo_config';
 const LAST_CONTEXT_KEY = 'last_context';
 const LAST_ISSUE_KEY = 'last_issue';
 const CONTEXT_MENU_ID = 'create-github-issue';
 const MAX_SNIPPET_LENGTH = 5 * 1024; // 5 KB
+
+// OAuth Configuration
+const OAUTH_CLIENT_ID = 'Ov23liJyiD9bKVNz2X2w';
+const OAUTH_AUTHORIZE_URL = 'https://github.com/login/oauth/authorize';
+const OAUTH_TOKEN_URL = 'https://github.com/login/oauth/access_token';
 
 chrome.runtime.onInstalled.addListener(async () => {
   await ensureContextMenu();
@@ -66,6 +73,26 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
         } catch (error) {
           console.error('Sign-in failed', error);
           sendResponse({ success: false, error: error.message || 'Sign-in failed' });
+        }
+        break;
+      }
+      case 'startOAuth': {
+        try {
+          const result = await startOAuthFlow(message.scopes || 'repo');
+          sendResponse({ success: true, ...result });
+        } catch (error) {
+          console.error('OAuth flow failed', error);
+          sendResponse({ success: false, error: error.message || 'OAuth flow failed' });
+        }
+        break;
+      }
+      case 'fetchRepos': {
+        try {
+          const repos = await fetchUserRepos();
+          sendResponse({ success: true, repos });
+        } catch (error) {
+          console.error('Failed to fetch repos', error);
+          sendResponse({ success: false, error: error.message || 'Failed to fetch repositories' });
         }
         break;
       }
@@ -208,6 +235,140 @@ async function signIn(token) {
   
   await saveToken(trimmedToken);
   return { success: true };
+}
+
+async function startOAuthFlow(scopes = 'repo') {
+  try {
+    const redirectUrl = chrome.identity.getRedirectURL();
+    const codeVerifier = generateCodeVerifier();
+    const codeChallenge = await generateCodeChallenge(codeVerifier);
+    const state = generateRandomState();
+    
+    // Store code verifier and state for later verification
+    await chrome.storage.local.set({
+      oauth_code_verifier: codeVerifier,
+      oauth_state: state
+    });
+    
+    const authUrl = new URL(OAUTH_AUTHORIZE_URL);
+    authUrl.searchParams.set('client_id', OAUTH_CLIENT_ID);
+    authUrl.searchParams.set('redirect_uri', redirectUrl);
+    authUrl.searchParams.set('scope', scopes);
+    authUrl.searchParams.set('state', state);
+    authUrl.searchParams.set('code_challenge', codeChallenge);
+    authUrl.searchParams.set('code_challenge_method', 'S256');
+    
+    const responseUrl = await chrome.identity.launchWebAuthFlow({
+      url: authUrl.toString(),
+      interactive: true
+    });
+    
+    if (!responseUrl) {
+      throw new Error('OAuth flow was cancelled or failed.');
+    }
+    
+    const params = new URL(responseUrl).searchParams;
+    const code = params.get('code');
+    const returnedState = params.get('state');
+    
+    if (!code) {
+      throw new Error('No authorization code received.');
+    }
+    
+    // Verify state
+    const stored = await chrome.storage.local.get(['oauth_state']);
+    if (returnedState !== stored.oauth_state) {
+      throw new Error('Invalid state parameter. Possible CSRF attack.');
+    }
+    
+    // Exchange code for token
+    const token = await exchangeCodeForToken(code, codeVerifier, redirectUrl);
+    
+    // Clean up temporary storage
+    await chrome.storage.local.remove(['oauth_code_verifier', 'oauth_state']);
+    
+    // Save token
+    await saveToken(token);
+    
+    return { success: true, token };
+  } catch (error) {
+    // Clean up on error
+    await chrome.storage.local.remove(['oauth_code_verifier', 'oauth_state']);
+    throw error;
+  }
+}
+
+async function exchangeCodeForToken(code, codeVerifier, redirectUri) {
+  const response = await fetch(OAUTH_TOKEN_URL, {
+    method: 'POST',
+    headers: {
+      'Accept': 'application/json',
+      'Content-Type': 'application/json'
+    },
+    body: JSON.stringify({
+      client_id: OAUTH_CLIENT_ID,
+      code: code,
+      redirect_uri: redirectUri,
+      code_verifier: codeVerifier
+    })
+  });
+  
+  if (!response.ok) {
+    const error = await safeParseJson(response);
+    throw new Error(error?.error_description || 'Failed to exchange code for token');
+  }
+  
+  const data = await response.json();
+  
+  if (data.error) {
+    throw new Error(data.error_description || data.error);
+  }
+  
+  return data.access_token;
+}
+
+function generateRandomState() {
+  const array = new Uint8Array(32);
+  crypto.getRandomValues(array);
+  return Array.from(array, byte => byte.toString(16).padStart(2, '0')).join('');
+}
+
+async function fetchUserRepos() {
+  const token = await getStoredToken();
+  if (!token) {
+    throw new Error('Authentication required.');
+  }
+  
+  try {
+    const response = await fetch('https://api.github.com/user/repos?per_page=100&sort=updated', {
+      headers: {
+        Authorization: `token ${token}`,
+        Accept: 'application/vnd.github+json',
+        'X-GitHub-Api-Version': '2022-11-28'
+      }
+    });
+    
+    if (!response.ok) {
+      if (response.status === 401) {
+        await clearStoredToken();
+        throw new Error('Authentication expired. Please sign in again.');
+      }
+      throw new Error(`Failed to fetch repositories: ${response.status}`);
+    }
+    
+    const repos = await response.json();
+    return repos.map(repo => ({
+      id: repo.id,
+      name: repo.name,
+      full_name: repo.full_name,
+      owner: repo.owner.login,
+      private: repo.private,
+      permissions: repo.permissions
+    }));
+  } catch (error) {
+    console.error('Error fetching repos:', error);
+    throw error;
+  }
 }
 
 async function createIssue(payload = {}) {

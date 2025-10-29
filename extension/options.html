@@ -79,8 +79,20 @@
 
     <div class="section">
       <h2>1. GitHub Authentication</h2>
-      <p class="hint">
-        Create a Personal Access Token at 
+      
+      <div class="info-box">
+        <strong>🚀 Easy OAuth Setup:</strong> Click the button below to sign in with GitHub using OAuth. 
+        No manual token creation needed!
+      </div>
+      
+      <div class="actions">
+        <button id="oauth-signin" type="button">🔐 Sign in with GitHub OAuth</button>
+        <button id="sign-out" type="button">Sign out (Clear Token)</button>
+      </div>
+      
+      <p class="hint" style="margin-top: 16px;">
+        <strong>Or use a Personal Access Token:</strong>
+        Create one at 
         <a class="link" href="https://github.com/settings/tokens/new" target="_blank" rel="noreferrer">
           github.com/settings/tokens/new
         </a>
@@ -88,25 +100,37 @@
         Required scopes: <strong>repo</strong> (for private repos) or <strong>public_repo</strong> (for public repos only)
       </p>
       
-      <label for="token">Personal Access Token</label>
+      <label for="token">Personal Access Token (Optional)</label>
       <input 
         id="token" 
         name="token" 
         type="password" 
         placeholder="ghp_xxxxxxxxxxxxxxxxxxxx or github_pat_xxxxxxxxxxxxxxxxxxxx" 
       />
-      <p class="hint">Your token is stored securely in Chrome's sync storage and never shared.</p>
       
       <div class="actions">
         <button id="sign-in" type="button">Save & Validate Token</button>
-        <button id="sign-out" type="button">Sign out (Clear Token)</button>
       </div>
+      
+      <p class="hint">Your credentials are stored securely in Chrome's sync storage and never shared.</p>
     </div>
 
     <div class="section">
       <h2>2. Default Repository</h2>
       <p class="hint">
         Specify the default GitHub repository where issues will be created.
+      </p>
+      
+      <div class="actions" style="margin-bottom: 16px;">
+        <button id="fetch-repos" type="button">📚 Load My Repositories</button>
+      </div>
+      
+      <label for="repo-select">Select Repository</label>
+      <select id="repo-select" name="repo-select" style="width: 100%; padding: 8px; margin-top: 4px; display: none;">
+        <option value="">-- Choose a repository --</option>
+      </select>
+      <p class="hint" id="repo-select-hint" style="display: none;">
+        Select a repository from the dropdown, or manually enter owner/repo below.
       </p>
       
       <label for="repo-url">Repository URL (or enter owner/repo below)</label>
