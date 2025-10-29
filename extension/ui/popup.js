@@ -117,6 +117,11 @@ async function handleSubmit(event) {
   if (technicalContext) {
     fullBody += `---\n\n## Technical Context\n\n${technicalContext}`;
   }
+  
+  // If no content at all, provide a default message
+  if (!fullBody) {
+    fullBody = 'No description provided.';
+  }
 
   setLoading(true);
   setStatus('Creating issue…', 'info');
@@ -125,7 +130,7 @@ async function handleSubmit(event) {
       type: 'createIssue',
       payload: {
         title,
-        body: fullBody || userFeedback,
+        body: fullBody,
         labels: defaultLabels
       }
     });
@@ -173,7 +178,7 @@ async function handleClearContext() {
   cachedContext = null;
   contextPreviewEl.textContent = 'Context cleared.';
   bodyInput.value = '';
-  bodyInput.placeholder = 'Describe what\'s wrong with the selected element or page...';
+  bodyInput.placeholder = "Describe what's wrong with the selected element or page...";
   titleInput.value = '';
   technicalContextInput.value = '';
   setStatus('🗑️ Context cleared.', 'info');

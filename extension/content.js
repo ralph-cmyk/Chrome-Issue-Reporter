@@ -345,19 +345,26 @@ function highlightElement(element) {
   
   // Create highlight overlay
   const rect = element.getBoundingClientRect();
+  
+  // Validate and sanitize rect values to prevent injection
+  const top = Math.max(0, parseFloat(rect.top) || 0);
+  const left = Math.max(0, parseFloat(rect.left) || 0);
+  const width = Math.max(0, parseFloat(rect.width) || 0);
+  const height = Math.max(0, parseFloat(rect.height) || 0);
+  
   const highlightDiv = document.createElement('div');
   highlightDiv.id = 'chrome-issue-reporter-highlight';
   highlightDiv.style.cssText = `
     position: fixed !important;
-    top: ${rect.top}px !important;
-    left: ${rect.left}px !important;
-    width: ${rect.width}px !important;
-    height: ${rect.height}px !important;
-    border: 2px solid #667eea !important;
-    background: rgba(102, 126, 234, 0.1) !important;
+    top: ${top}px !important;
+    left: ${left}px !important;
+    width: ${width}px !important;
+    height: ${height}px !important;
+    border: 3px solid #667eea !important;
+    background: rgba(102, 126, 234, 0.15) !important;
     z-index: 2147483647 !important;
     pointer-events: none !important;
-    box-shadow: 0 0 0 2px rgba(102, 126, 234, 0.3) !important;
+    box-shadow: 0 0 0 3px rgba(102, 126, 234, 0.4), inset 0 0 0 3px rgba(255, 255, 255, 0.5) !important;
   `;
   document.documentElement.appendChild(highlightDiv);
 }
