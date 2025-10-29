@@ -46,32 +46,7 @@ jobs:
       - name: Build and package extension
         run: npm run package
 
-      - name: Delete previous releases
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        run: |
-          echo "Deleting previous releases..."
-          
-          # Get all releases
-          RELEASES=$(gh release list --limit 100 --json tagName,id)
-          
-          # Delete all releases
-          echo "$RELEASES" | jq -r '.[] | "\(.id) \(.tagName)"' | while read -r id tag; do
-            echo "Deleting release: $tag (ID: $id)"
-            gh release delete "$tag" --yes || true
-          done
-          
-          # Delete all tags
-          git fetch --tags
-          git tag -l | while read -r tag; do
-            echo "Deleting tag: $tag"
-            git push --delete origin "$tag" || true
-            git tag -d "$tag" || true
-          done
-          
-          echo "Cleanup complete"
-
-      - name: Create and push tag
+      - name: Create and push new tag
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
@@ -84,6 +59,33 @@ jobs:
           git push origin "$TAG"
           
           echo "Created and pushed tag: $TAG"
+
+      - name: Delete previous releases
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          echo "Deleting previous releases..."
+          NEW_TAG="${{ steps.version.outputs.tag }}"
+          
+          # Get all releases
+          RELEASES=$(gh release list --limit 100 --json tagName,id)
+          
+          # Delete all releases (they will be recreated with only the new one)
+          echo "$RELEASES" | jq -r '.[] | "\(.id) \(.tagName)"' | while read -r id tag; do
+            echo "Deleting release: $tag (ID: $id)"
+            gh release delete "$tag" --yes || true
+          done
+          
+          # Delete all tags except the new one
+          git fetch --tags
+          TAGS_TO_DELETE=$(git tag -l | grep -v "^${NEW_TAG}$" || true)
+          if [ -n "$TAGS_TO_DELETE" ]; then
+            echo "Deleting old tags..."
+            echo "$TAGS_TO_DELETE" | xargs -r git push --delete origin || true
+            echo "$TAGS_TO_DELETE" | xargs -r git tag -d || true
+          fi
+          
+          echo "Cleanup complete"
 
       - name: Create Release
         uses: softprops/action-gh-release@v1
