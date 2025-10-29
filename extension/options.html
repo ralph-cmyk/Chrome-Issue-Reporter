@@ -95,30 +95,11 @@
         <button id="oauth-signin" type="button">🔐 Sign in with GitHub</button>
         <button id="sign-out" type="button">Sign out (Clear Token)</button>
       </div>
-      
+
       <p class="hint" style="margin-top: 16px;">
-        <strong>Or use a Personal Access Token:</strong>
-        Create one at 
-        <a class="link" href="https://github.com/settings/tokens/new" target="_blank" rel="noreferrer">
-          github.com/settings/tokens/new
-        </a>
-        <br>
-        Required scopes: <strong>repo</strong> (for private repos) or <strong>public_repo</strong> (for public repos only)
+        Once you authorize the extension, the token is stored securely in Chrome's sync storage and
+        never leaves your browser.
       </p>
-      
-      <label for="token">Personal Access Token (Optional)</label>
-      <input 
-        id="token" 
-        name="token" 
-        type="password" 
-        placeholder="ghp_xxxxxxxxxxxxxxxxxxxx or github_pat_xxxxxxxxxxxxxxxxxxxx" 
-      />
-      
-      <div class="actions">
-        <button id="sign-in" type="button">Save & Validate Token</button>
-      </div>
-      
-      <p class="hint">Your credentials are stored securely in Chrome's sync storage and never shared.</p>
     </div>
 
     <div class="section">

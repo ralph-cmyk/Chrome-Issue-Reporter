@@ -104,22 +104,6 @@ This document explains how to test the Chrome Issue Reporter extension with the 
    - Try to create an issue (steps from Test 3)
    - You should see an error: "Authentication required"
 
-### Test 5: Personal Access Token (Alternative Method)
-
-1. **Create a PAT**:
-   - Go to https://github.com/settings/tokens/new
-   - Create a token with `repo` scope
-   - Copy the token
-
-2. **Sign In with PAT**:
-   - Open the Options page
-   - Paste the token in the "Personal Access Token" field
-   - Click "Save & Validate Token"
-   - You should see "✅ Token validated and saved successfully!"
-
-3. **Verify**:
-   - Follow Test 2 and Test 3 to verify issue creation works
-
 ## Expected Behavior
 
 ### Authentication Status
@@ -151,7 +135,6 @@ The extension should gracefully handle:
 - [ ] Issue creation succeeds with captured context
 - [ ] Issue link opens correct GitHub issue
 - [ ] Sign out clears credentials
-- [ ] PAT authentication works as alternative
 - [ ] Error messages are clear and helpful
 - [ ] UI updates correctly after each action
 
