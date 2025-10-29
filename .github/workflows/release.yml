@@ -32,42 +32,55 @@ jobs:
           echo "version=$VERSION" >> $GITHUB_OUTPUT
           echo "Extension version: $VERSION"
       
+      - name: Rename package for clarity
+        run: mv chrome-issue-reporter.zip chrome-issue-reporter-extension.zip
+      
       - name: Upload artifact
         uses: actions/upload-artifact@v4
         with:
           name: chrome-issue-reporter-v${{ steps.get_version.outputs.version }}
-          path: chrome-issue-reporter.zip
+          path: chrome-issue-reporter-extension.zip
           retention-days: 90
       
       - name: Create Release
         if: startsWith(github.ref, 'refs/tags/')
         uses: softprops/action-gh-release@v1
         with:
-          files: chrome-issue-reporter.zip
+          files: chrome-issue-reporter-extension.zip
           body: |
             ## Chrome Issue Reporter v${{ steps.get_version.outputs.version }}
             
-            ### Installation
+            ### ⚠️ IMPORTANT: Download the Correct File
             
-            1. Download `chrome-issue-reporter.zip` from the assets below
-            2. Extract the ZIP file to a permanent location
-            3. Open Chrome and go to `chrome://extensions/`
-            4. Enable **Developer mode** (top-right toggle)
-            5. Click **Load unpacked** and select the extracted folder
+            **✅ Download:** `chrome-issue-reporter-extension.zip` (the built extension package)
             
-            For detailed installation instructions, see [INSTALL.md](https://github.com/${{ github.repository }}/blob/main/INSTALL.md)
+            **❌ DO NOT download:** Source code (zip) or Source code (tar.gz) - these contain the repository structure and will NOT work with Chrome Web Store!
+            
+            ### Installation Instructions
+            
+            1. **Download** `chrome-issue-reporter-extension.zip` from the Assets section below
+            2. **Extract** the ZIP file to a permanent location on your computer
+            3. **Open Chrome** and navigate to `chrome://extensions/`
+            4. **Enable** Developer mode (toggle in the top-right corner)
+            5. **Click** "Load unpacked" and select the extracted folder
+            
+            📖 For detailed step-by-step instructions, see [INSTALL.md](https://github.com/${{ github.repository }}/blob/main/INSTALL.md)
             
             ### What's Included
             
-            - Complete extension files ready to install
-            - Manifest V3 compatible
-            - GitHub OAuth integration for issue creation
+            This package contains:
+            - Complete Chrome extension files (Manifest V3)
+            - All required JavaScript, HTML, and JSON files
+            - Ready to load directly into Chrome
             
             ### Configuration Required
             
-            Before using the extension, you need to:
-            1. Create a GitHub OAuth App and get your Client ID
-            2. Update `background.js` with your configuration
-            3. See [INSTALL.md](https://github.com/${{ github.repository }}/blob/main/INSTALL.md) for full setup instructions
+            After installation, configure the extension:
+            1. Open the extension's **Options** page
+            2. Sign in with GitHub using Device Flow (no OAuth app needed!)
+            3. Select your target repository
+            4. Start creating issues!
+            
+            📖 See [QUICKSTART.md](https://github.com/${{ github.repository }}/blob/main/QUICKSTART.md) for a 7-minute setup guide
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

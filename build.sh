@@ -8,7 +8,7 @@ echo ""
 
 # Clean previous builds
 echo "1️⃣  Cleaning previous builds..."
-rm -rf dist chrome-issue-reporter.zip
+rm -rf dist chrome-issue-reporter.zip chrome-issue-reporter-extension.zip
 
 # Create dist directory
 echo "2️⃣  Creating dist directory..."
@@ -21,15 +21,15 @@ cp -r extension/* dist/
 # Create ZIP package
 echo "4️⃣  Creating ZIP package..."
 cd dist
-zip -r ../chrome-issue-reporter.zip * > /dev/null
+zip -r ../chrome-issue-reporter-extension.zip * > /dev/null
 cd ..
 
 # Show results
 echo ""
 echo "✅ Build complete!"
 echo ""
-echo "📦 Package: chrome-issue-reporter.zip"
-echo "📊 Size: $(du -h chrome-issue-reporter.zip | cut -f1)"
+echo "📦 Package: chrome-issue-reporter-extension.zip"
+echo "📊 Size: $(du -h chrome-issue-reporter-extension.zip | cut -f1)"
 echo ""
 echo "Next steps:"
 echo "1. Extract the ZIP file to a permanent location"

@@ -26,9 +26,11 @@ Use this checklist when creating a new release of Chrome Issue Reporter.
 
 2. **GitHub Actions will automatically:**
    - Build the extension
-   - Create the ZIP package
+   - Create the ZIP package as `chrome-issue-reporter-extension.zip`
    - Create a GitHub Release
-   - Upload the ZIP as a release asset
+   - Upload the built extension ZIP as a release asset
+   
+   **Note:** The release will include the built extension package (`chrome-issue-reporter-extension.zip`) plus auto-generated source code archives. Users should download the `-extension.zip` file, NOT the source code archives.
 
 ### Option 2: Manual Release
 
@@ -43,7 +45,8 @@ Use this checklist when creating a new release of Chrome Issue Reporter.
    - Go to your repository's releases page: `https://github.com/YOUR_USERNAME/YOUR_REPO/releases/new`
    - Create a new tag (e.g., `v0.1.0`)
    - Fill in release title and notes
-   - Upload `chrome-issue-reporter.zip`
+   - Upload `chrome-issue-reporter.zip` (you may want to rename it to `chrome-issue-reporter-extension.zip` for clarity)
+   - **Important:** Add a note in the release description warning users NOT to download the source code archives
    - Publish release
 
 ## Post-Release
@@ -58,20 +61,29 @@ Use this checklist when creating a new release of Chrome Issue Reporter.
 ```markdown
 ## Chrome Issue Reporter v0.1.0
 
+### ⚠️ IMPORTANT: Download the Correct File
+
+**✅ Download:** `chrome-issue-reporter-extension.zip` (the built extension package)
+
+**❌ DO NOT download:** Source code (zip) or Source code (tar.gz) - these are the repository files and will NOT work as a Chrome extension!
+
 ### What's New
 - Feature 1
 - Feature 2
 - Bug fix 1
 
 ### Installation
-1. Download `chrome-issue-reporter.zip`
-2. Extract to a permanent location
-3. Load in Chrome via chrome://extensions/
+1. Download `chrome-issue-reporter-extension.zip` from the Assets section below
+2. Extract the ZIP file to a permanent location on your computer
+3. Open Chrome and navigate to chrome://extensions/
+4. Enable Developer mode (toggle in top-right)
+5. Click "Load unpacked" and select the extracted folder
 
 See [INSTALL.md](INSTALL.md) for detailed instructions.
 
 ### Configuration
-This release requires GitHub OAuth setup. See [QUICKSTART.md](QUICKSTART.md) for the 7-minute setup guide.
+This extension uses GitHub Device Flow for authentication - no OAuth app setup required! 
+See [QUICKSTART.md](QUICKSTART.md) for the 7-minute setup guide.
 ```
 
 ## Versioning
