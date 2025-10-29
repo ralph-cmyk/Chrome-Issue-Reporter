@@ -46,6 +46,31 @@ jobs:
       - name: Build and package extension
         run: npm run package
 
+      - name: Delete previous releases
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          echo "Deleting previous releases..."
+          
+          # Get all releases
+          RELEASES=$(gh release list --limit 100 --json tagName,id)
+          
+          # Delete all releases
+          echo "$RELEASES" | jq -r '.[] | "\(.id) \(.tagName)"' | while read -r id tag; do
+            echo "Deleting release: $tag (ID: $id)"
+            gh release delete "$tag" --yes || true
+          done
+          
+          # Delete all tags
+          git fetch --tags
+          git tag -l | while read -r tag; do
+            echo "Deleting tag: $tag"
+            git push --delete origin "$tag" || true
+            git tag -d "$tag" || true
+          done
+          
+          echo "Cleanup complete"
+
       - name: Create and push tag
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
