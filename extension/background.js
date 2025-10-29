@@ -1,5 +1,3 @@
-import { generateCodeVerifier, generateCodeChallenge } from './pkce.js';
-
 const TOKEN_KEY = 'github_token';
 const CONFIG_KEY = 'repo_config';
 const LAST_CONTEXT_KEY = 'last_context';
