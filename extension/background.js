@@ -221,6 +221,26 @@ async function startDeviceFlow(scopes = 'repo') {
     
     if (!deviceCodeResponse.ok) {
       const errorData = await safeParseJson(deviceCodeResponse);
+      
+      // Provide helpful error message for 404 (most common issue)
+      if (deviceCodeResponse.status === 404) {
+        const setupUrl = 'https://github.com/settings/developers';
+        throw new Error(
+          `OAuth App not configured correctly!\n\n` +
+          `Common causes:\n` +
+          `1. Device Flow is not enabled in your GitHub OAuth App\n` +
+          `2. The Client ID in background.js is incorrect\n` +
+          `3. The OAuth App doesn't exist\n\n` +
+          `To fix:\n` +
+          `1. Go to ${setupUrl}\n` +
+          `2. Open your OAuth App settings\n` +
+          `3. Enable "Device Flow" checkbox\n` +
+          `4. Update GITHUB_CLIENT_ID in background.js\n` +
+          `5. Reload the extension\n\n` +
+          `See INSTALL.md for detailed instructions.`
+        );
+      }
+      
       const errorMessage = errorData?.error_description || errorData?.message || 
                           `Failed to initiate device flow (status: ${deviceCodeResponse.status})`;
       throw new Error(errorMessage);

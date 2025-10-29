@@ -12,8 +12,10 @@ stores tokens securely in `chrome.storage.sync`, and submits issues via the GitH
    - ⚠️ **Important:** Download the `-extension.zip` file, NOT the "Source code" archives!
 2. **Extract:** Unzip to a permanent location on your computer
 3. **Install:** Open `chrome://extensions/`, enable Developer mode, click "Load unpacked", and select the extracted folder
+4. **⚠️ REQUIRED Setup:** You must create a GitHub OAuth App and enable Device Flow - see [SETUP-DEVICE-FLOW.md](SETUP-DEVICE-FLOW.md) for detailed instructions
 
 📖 **For detailed step-by-step instructions, see [INSTALL.md](INSTALL.md)**  
+🔐 **For OAuth Device Flow setup, see [SETUP-DEVICE-FLOW.md](SETUP-DEVICE-FLOW.md)**  
 ⚡ **For a quick 7-minute setup guide, see [QUICKSTART.md](QUICKSTART.md)**
 
 ## How It Works
