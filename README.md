@@ -1,9 +1,8 @@
 # Chrome Issue Reporter
 
 A Chrome extension (Manifest V3) that captures the current page context and helps you file GitHub
-issues without leaving the browser. The extension uses the PKCE OAuth flow with
-`chrome.identity.launchWebAuthFlow`, stores tokens securely in `chrome.storage.sync`, and submits
-issues via the GitHub REST API.
+issues without leaving the browser. The extension uses GitHub's Device Flow for authentication,
+stores tokens securely in `chrome.storage.sync`, and submits issues via the GitHub REST API.
 
 ## 🚀 Quick Installation
 
@@ -36,9 +35,8 @@ issues via the GitHub REST API.
 Chrome-Issue-Reporter/
 ├── extension/              # Extension source files
 │   ├── manifest.json      # Extension manifest (V3)
-│   ├── background.js      # Service worker, OAuth, GitHub API
+│   ├── background.js      # Service worker, Device Flow auth, GitHub API
 │   ├── content.js         # Page context capture
-│   ├── pkce.js            # PKCE OAuth implementation
 │   ├── options.html       # Extension options page
 │   ├── options.js         # Options page logic
 │   └── ui/
