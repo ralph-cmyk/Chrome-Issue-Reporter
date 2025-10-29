@@ -1,6 +1,10 @@
 let cachedContext = null;
 let defaultLabels = [];
 
+// Constants
+const SCRIPT_INITIALIZATION_DELAY = 100; // ms to wait for content script to initialize
+const UNSUPPORTED_URL_PREFIXES = ['chrome://', 'chrome-extension://', 'edge://', 'about:'];
+
 const statusEl = document.getElementById('status');
 const titleInput = document.getElementById('title');
 const bodyInput = document.getElementById('body');
@@ -160,24 +164,23 @@ async function handleLiveSelect() {
     }
     
     // Check if page supports content scripts
-    if (tab.url && (tab.url.startsWith('chrome://') || tab.url.startsWith('chrome-extension://') || 
-        tab.url.startsWith('edge://') || tab.url.startsWith('about:'))) {
+    if (tab.url && UNSUPPORTED_URL_PREFIXES.some(prefix => tab.url.startsWith(prefix))) {
       setStatus('❌ Live select is not supported on browser internal pages.', 'error');
       return;
     }
     
-    // Try to inject content script if not already loaded
+    // Try to communicate with content script, inject if needed
     try {
       await chrome.tabs.sendMessage(tab.id, { type: 'startLiveSelect' });
     } catch (error) {
-      // Content script might not be loaded, try to inject it
+      // Content script not responding, try to inject it
       try {
         await chrome.scripting.executeScript({
           target: { tabId: tab.id },
           files: ['content.js']
         });
-        // Wait a bit for the script to initialize
-        await new Promise(resolve => setTimeout(resolve, 100));
+        // Wait for the script to initialize
+        await new Promise(resolve => setTimeout(resolve, SCRIPT_INITIALIZATION_DELAY));
         // Try sending the message again
         await chrome.tabs.sendMessage(tab.id, { type: 'startLiveSelect' });
       } catch (injectError) {
