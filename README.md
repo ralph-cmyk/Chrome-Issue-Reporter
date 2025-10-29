@@ -99,6 +99,7 @@ After installation, you need to configure the extension:
 - `activeTab` and `scripting` – used to communicate with the active tab and collect context.
 - `storage` – stores OAuth tokens, repository defaults, and captured context.
 - Host permission `https://api.github.com/*` – required to create issues via the GitHub API.
+- Host permission `https://github.com/login/*` – required for OAuth Device Flow authentication.
 
 Captured page context (URL, selection, snippets, and last error message) is stored locally until you
 submit or clear it. OAuth tokens are only stored inside Chrome’s managed storage. No data is sent to
