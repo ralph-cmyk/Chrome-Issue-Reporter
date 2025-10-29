@@ -23,36 +23,37 @@ Unzip the file to a **permanent location** (e.g., `Documents/ChromeExtensions/`)
 
 ## ⚙️ Configuration (5 minutes)
 
-### Step 1: Create GitHub OAuth App
+### Step 1: Create GitHub OAuth App with Device Flow
 1. Go to: https://github.com/settings/developers
 2. Click **New OAuth App**
 3. Fill in:
    - **Name:** Chrome Issue Reporter
-   - **Homepage:** http://localhost
-   - **Callback URL:** `https://YOUR_EXTENSION_ID.chromiumapp.org/`
-     - Find YOUR_EXTENSION_ID in `chrome://extensions/` under the extension
-4. Save and copy your **Client ID**
+   - **Homepage:** https://github.com/ralph-cmyk/Chrome-Issue-Reporter
+   - **Callback URL:** `http://localhost` (required but not used for Device Flow)
+4. Click **Register application**
+5. **⚠️ IMPORTANT:** After creation, open the app settings again
+6. Scroll down and **check "Enable Device Flow"** ✅
+7. Click **Update application**
+8. Copy your **Client ID** (starts with "Ov23...")
 
 ### Step 2: Configure Extension
-1. Open the extracted folder
+1. Open the extracted extension folder
 2. Edit `background.js` in a text editor
-3. Replace these values (around line 3-8):
+3. Find this line (around line 11):
    ```javascript
-   const CLIENT_ID = 'paste_your_client_id_here';
-   const REDIRECT_URI = 'https://YOUR_EXTENSION_ID.chromiumapp.org/';
-   const GITHUB_SCOPES = 'public_repo';  // or 'repo' for private repos
-   const DEFAULT_OWNER = 'your-github-username';
-   const DEFAULT_REPO = 'your-repository-name';
-   const DEFAULT_LABELS = ['bug'];
+   const GITHUB_CLIENT_ID = 'Ov23liJyiD9bKVNz2X2w';
    ```
-4. Save the file
-5. Go to `chrome://extensions/` and click **Reload** on the extension
+4. Replace with your Client ID from Step 1
+5. Save the file
+6. Go to `chrome://extensions/` and click **Reload** on the extension
 
 ### Step 3: Sign In
-1. Click the extension icon in Chrome toolbar
-2. Click **Sign in with GitHub**
-3. Choose scope and authorize
-4. ✅ Ready to use!
+1. Right-click the extension icon → select **Options**
+2. Click **"Sign in with GitHub"**
+3. Copy the verification code shown
+4. Enter it on the GitHub page that opens
+5. Click **Authorize**
+6. ✅ Ready to use!
 
 ## 🎯 Usage (30 seconds)
 

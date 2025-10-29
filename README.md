@@ -54,24 +54,29 @@ Chrome-Issue-Reporter/
 
 After installation, you need to configure the extension:
 
-1. **Sign in with GitHub:**
+1. **Create a GitHub OAuth App (REQUIRED):**
+   - This extension uses GitHub's Device Flow for authentication
+   - You MUST create an OAuth App with Device Flow enabled
+   - See [INSTALL.md](INSTALL.md) for step-by-step instructions
+
+2. **Sign in with GitHub:**
    - Open the extension's **Options** page
    - Click **"Sign in with GitHub"** to start the Device Flow
    - You'll receive a code to enter on GitHub.com
    - After authorization, you're ready to go!
 
-2. **Select a Repository:**
+3. **Select a Repository:**
    - After signing in, click **"Load My Repositories"**
    - Choose the repository where you want to create issues from the dropdown
    - Or manually enter the repository owner and name
 
-3. **Start Using:**
+4. **Start Using:**
    - Right-click on any page and select **"Create GitHub Issue from Page/Selection"**
    - Review and submit your issue!
 
 📖 **See [INSTALL.md](INSTALL.md) for detailed setup instructions**
 
-> **Note:** This extension uses GitHub's Device Flow for authentication - no OAuth app setup required!
+> **Note:** This extension uses GitHub's Device Flow for authentication. While Device Flow doesn't require a callback URL, you still need to create a GitHub OAuth App and enable Device Flow in its settings.
 
 ## Using the extension
 

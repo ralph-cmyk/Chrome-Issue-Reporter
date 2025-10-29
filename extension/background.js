@@ -8,6 +8,10 @@ const MAX_SNIPPET_LENGTH = 5 * 1024; // 5 KB
 // GitHub Device Flow Configuration
 const GITHUB_DEVICE_CODE_URL = 'https://github.com/login/device/code';
 const GITHUB_ACCESS_TOKEN_URL = 'https://github.com/login/oauth/access_token';
+// IMPORTANT: Replace this with your own GitHub OAuth App Client ID
+// The app MUST have Device Flow enabled in GitHub settings
+// Create one at: https://github.com/settings/developers
+// See INSTALL.md for detailed instructions
 const GITHUB_CLIENT_ID = 'Ov23liJyiD9bKVNz2X2w';
 
 chrome.runtime.onInstalled.addListener(async () => {
