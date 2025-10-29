@@ -24,12 +24,10 @@ jobs:
         run: |
           set -euo pipefail
           
-          # Fetch all tags
-          git fetch --tags
-          
           # Get the highest numeric version tag (format: vN where N is a number)
           # Filter for tags matching vN pattern, extract the number, sort, and get the highest
-          LATEST_VERSION=$(git tag -l 'v*' | grep -E '^v[0-9]+$' | sed 's/^v//' | sort -n | tail -1)
+          # Note: checkout@v4 with fetch-depth: 0 already fetches all tags
+          LATEST_VERSION=$(git tag -l 'v*' | grep -E '^v[0-9]+$' | sed 's/^v//' | sort -n | tail -1 || true)
           
           # If no version tags exist, start at 0
           if [ -z "$LATEST_VERSION" ]; then
