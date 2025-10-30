@@ -129,7 +129,7 @@ After installation from the Chrome Web Store, you need to configure the extensio
 ## Permissions and privacy
 
 - `contextMenus` – adds the “Create GitHub Issue from Page/Selection” menu item.
-- `activeTab` and `scripting` – used to communicate with the active tab and collect context.
+- `activeTab` and `scripting` – used to communicate with the active tab and collect context **only when you explicitly trigger the extension**. The extension does not run on pages until you activate it.
 - `storage` – stores OAuth tokens, repository defaults, and captured context.
 - Host permission `https://api.github.com/*` – required to create issues via the GitHub API.
 - Host permission `https://github.com/login/*` – required for OAuth authentication.

@@ -522,10 +522,25 @@ async function safeParseJson(response) {
 
 async function requestContextFromTab(tabId) {
   try {
+    // Try to send message first
     return await chrome.tabs.sendMessage(tabId, { type: 'captureContext' });
   } catch (error) {
-    console.error('Unable to retrieve context from tab', error);
-    throw error;
+    // Content script not loaded, try to inject it
+    try {
+      await chrome.scripting.executeScript({
+        target: { tabId },
+        files: ['content.js']
+      });
+      
+      // Wait a bit for the script to initialize
+      await new Promise(resolve => setTimeout(resolve, 100));
+      
+      // Try sending the message again
+      return await chrome.tabs.sendMessage(tabId, { type: 'captureContext' });
+    } catch (injectError) {
+      console.error('Unable to inject content script or retrieve context from tab', injectError);
+      throw injectError;
+    }
   }
 }
 
