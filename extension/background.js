@@ -12,9 +12,6 @@ const MAX_SNIPPET_LENGTH = 5 * 1024; // 5 KB
 // GitHub OAuth Configuration
 const GITHUB_DEVICE_CODE_URL = 'https://github.com/login/device/code';
 const GITHUB_ACCESS_TOKEN_URL = 'https://github.com/login/oauth/access_token';
-// DEPRECATED: Client ID is now configured by the user in options
-// This is kept as a fallback but should not be used
-const GITHUB_CLIENT_ID_FALLBACK = 'Ov23liJyiD9bKVNz2X2w';
 
 chrome.runtime.onInstalled.addListener(async () => {
   await ensureContextMenu();
@@ -252,9 +249,9 @@ async function startDeviceFlow(scopes = 'repo') {
   try {
     // Get the user-configured OAuth client ID
     const oauthConfig = await getOAuthConfig();
-    const clientId = oauthConfig.clientId || GITHUB_CLIENT_ID_FALLBACK;
+    const clientId = oauthConfig.clientId;
     
-    if (!oauthConfig.clientId) {
+    if (!clientId) {
       throw new Error(
         'OAuth Client ID not configured!\n\n' +
         'Please configure your GitHub OAuth App Client ID in the extension options before signing in.\n\n' +
@@ -332,7 +329,11 @@ async function pollForDeviceToken(deviceCode, interval = 5) {
   
   // Get the user-configured OAuth client ID
   const oauthConfig = await getOAuthConfig();
-  const clientId = oauthConfig.clientId || GITHUB_CLIENT_ID_FALLBACK;
+  const clientId = oauthConfig.clientId;
+  
+  if (!clientId) {
+    throw new Error('OAuth Client ID not configured');
+  }
   
   while (attempts < maxAttempts) {
     await sleep(interval * 1000);

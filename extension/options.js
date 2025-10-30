@@ -7,9 +7,9 @@ async function init() {
   document.getElementById('save-oauth-config').addEventListener('click', handleSaveOAuthConfig);
   document.getElementById('oauth-signin').addEventListener('click', handleOAuthSignIn);
   document.getElementById('sign-out').addEventListener('click', handleSignOut);
-  document.getElementById('repo-url').addEventListener('input', handleRepoUrlChange);
-  document.getElementById('fetch-repos').addEventListener('click', handleFetchRepos);
-  document.getElementById('repo-select').addEventListener('change', handleRepoSelect);
+  
+  // Auto-load repos if authenticated
+  await autoLoadRepos();
 }
 
 document.addEventListener('DOMContentLoaded', init);
@@ -90,70 +90,118 @@ async function handleOAuthSignIn() {
   }
 }
 
-async function handleFetchRepos() {
-  const repoSelect = document.getElementById('repo-select');
-  const repoSelectHint = document.getElementById('repo-select-hint');
-  const button = document.getElementById('fetch-repos');
+async function autoLoadRepos() {
+  // Check if user is authenticated
+  const authResponse = await chrome.runtime.sendMessage({ type: 'getAuthState' });
+  if (authResponse?.success && authResponse.authenticated) {
+    await handleFetchRepos(true); // true = silent mode, don't show button state
+  } else {
+    // Show no repos message
+    const noReposMessage = document.getElementById('no-repos-message');
+    if (noReposMessage) {
+      noReposMessage.style.display = 'block';
+    }
+  }
+}
+
+async function handleFetchRepos(silent = false) {
+  const repoListContainer = document.getElementById('repo-list-container');
+  const repoList = document.getElementById('repo-list');
+  const noReposMessage = document.getElementById('no-repos-message');
   
-  button.disabled = true;
-  button.classList.add('loading');
-  setStatus('🔄 Loading your repositories from GitHub...', 'info');
+  if (!silent) {
+    setStatus('🔄 Loading your repositories from GitHub...', 'info');
+  }
   
   try {
     const response = await chrome.runtime.sendMessage({ type: 'fetchRepos' });
     
     if (response?.success && response.repos) {
-      // Clear existing options except the first one
-      repoSelect.innerHTML = '<option value="">-- Choose a repository --</option>';
+      // Hide no repos message
+      if (noReposMessage) {
+        noReposMessage.style.display = 'none';
+      }
       
-      // Add repos to dropdown
-      response.repos.forEach(repo => {
-        const option = document.createElement('option');
-        option.value = repo.full_name;
-        option.textContent = `${repo.full_name}${repo.private ? ' 🔒' : ''}`;
-        repoSelect.appendChild(option);
+      // Get current config to select the right repo
+      const configResponse = await chrome.runtime.sendMessage({ type: 'getConfig' });
+      const currentRepo = configResponse?.success && configResponse.config 
+        ? `${configResponse.config.owner}/${configResponse.config.repo}` 
+        : '';
+      
+      // Clear existing list
+      repoList.innerHTML = '';
+      
+      // Add repos as radio buttons
+      response.repos.forEach((repo, index) => {
+        const repoItem = document.createElement('div');
+        repoItem.className = 'repo-item';
+        if (repo.full_name === currentRepo) {
+          repoItem.classList.add('selected');
+        }
+        
+        const radio = document.createElement('input');
+        radio.type = 'radio';
+        radio.name = 'repository';
+        radio.id = `repo-${index}`;
+        radio.value = repo.full_name;
+        radio.checked = repo.full_name === currentRepo;
+        
+        const label = document.createElement('label');
+        label.htmlFor = `repo-${index}`;
+        label.innerHTML = `
+          <span>${repo.full_name}</span>
+          ${repo.private ? '<span class="repo-private-badge">🔒 Private</span>' : ''}
+        `;
+        
+        // Click handler for the entire item
+        repoItem.addEventListener('click', (e) => {
+          // Unselect all
+          document.querySelectorAll('.repo-item').forEach(item => {
+            item.classList.remove('selected');
+          });
+          // Select this one
+          repoItem.classList.add('selected');
+          radio.checked = true;
+        });
+        
+        repoItem.appendChild(radio);
+        repoItem.appendChild(label);
+        repoList.appendChild(repoItem);
       });
       
-      // Show the dropdown
-      repoSelect.style.display = 'block';
-      repoSelectHint.style.display = 'block';
+      // Show the repo list
+      repoListContainer.style.display = 'block';
       
-      setStatus(`✅ Loaded ${response.repos.length} repositories successfully!\n\n📚 Select a repository from the dropdown below.`, 'success');
+      if (!silent) {
+        setStatus(`✅ Loaded ${response.repos.length} repositories successfully!\n\n📚 Select a repository and click "Save Settings" below.`, 'success');
+      }
     } else {
-      setStatus('❌ Failed to load repositories\n\n' + (response?.error || 'Unknown error occurred'), 'error');
+      if (noReposMessage) {
+        noReposMessage.style.display = 'block';
+      }
+      if (!silent) {
+        setStatus('❌ Failed to load repositories\n\n' + (response?.error || 'Unknown error occurred'), 'error');
+      }
     }
   } catch (error) {
-    setStatus('❌ Error loading repositories\n\n' + error.message, 'error');
-  } finally {
-    button.disabled = false;
-    button.classList.remove('loading');
-  }
-}
-
-async function handleRepoSelect() {
-  const repoSelect = document.getElementById('repo-select');
-  const selectedFullName = repoSelect.value;
-  
-  if (selectedFullName) {
-    const [owner, repo] = selectedFullName.split('/');
-    document.getElementById('owner').value = owner || '';
-    document.getElementById('repo').value = repo || '';
-    setStatus(`✅ Selected: ${selectedFullName}\n\n💡 Don't forget to click "Save Repository Settings" below!`, 'info');
+    if (!silent) {
+      setStatus('❌ Error loading repositories\n\n' + error.message, 'error');
+    }
   }
 }
 
 async function loadConfig() {
-  const ownerInput = document.getElementById('owner');
-  const repoInput = document.getElementById('repo');
   const labelsInput = document.getElementById('labels');
 
   const response = await chrome.runtime.sendMessage({ type: 'getConfig' });
   if (response?.success && response.config) {
-    ownerInput.value = response.config.owner || '';
-    repoInput.value = response.config.repo || '';
-    labelsInput.value = Array.isArray(response.config.labels)
+    const labelsValue = Array.isArray(response.config.labels) && response.config.labels.length > 0
       ? response.config.labels.join(', ')
-      : '';
+      : 'created by ChromeExtension';
+    labelsInput.value = labelsValue;
+  } else {
+    // Set default label
+    labelsInput.value = 'created by ChromeExtension';
   }
 }
 
@@ -202,18 +250,22 @@ async function handleSaveOAuthConfig() {
 }
 
 async function handleSave() {
-  const owner = document.getElementById('owner').value.trim();
-  const repo = document.getElementById('repo').value.trim();
+  // Get selected repository from radio buttons
+  const selectedRadio = document.querySelector('input[name="repository"]:checked');
+  
+  if (!selectedRadio) {
+    setStatus('⚠️ No repository selected\n\nPlease select a repository from the list above.', 'error');
+    return;
+  }
+  
+  const fullName = selectedRadio.value;
+  const [owner, repo] = fullName.split('/');
+  
   const labels = document
     .getElementById('labels')
     .value.split(',')
     .map((label) => label.trim())
     .filter(Boolean);
-
-  if (!owner || !repo) {
-    setStatus('⚠️ Missing required fields\n\nRepository owner and name are required.', 'error');
-    return;
-  }
 
   const button = document.getElementById('save');
   button.disabled = true;
@@ -228,7 +280,7 @@ async function handleSave() {
   button.classList.remove('loading');
 
   if (response?.success) {
-    setStatus(`✅ Repository settings saved successfully!\n\n📂 ${owner}/${repo}\n🏷️ Labels: ${labels.length > 0 ? labels.join(', ') : 'None'}`, 'success');
+    setStatus(`✅ Settings saved successfully!\n\n📂 Repository: ${owner}/${repo}\n🏷️ Labels: ${labels.length > 0 ? labels.join(', ') : 'None'}`, 'success');
   } else {
     setStatus('❌ Unable to save settings\n\n' + (response?.error || 'Unknown error occurred'), 'error');
   }
@@ -250,7 +302,6 @@ async function handleSignOut() {
 async function refreshAuthState() {
   const oauthSignIn = document.getElementById('oauth-signin');
   const signOut = document.getElementById('sign-out');
-  const fetchRepos = document.getElementById('fetch-repos');
 
   const response = await chrome.runtime.sendMessage({ type: 'getAuthState' });
   if (response?.success && response.authenticated) {
@@ -258,65 +309,30 @@ async function refreshAuthState() {
     oauthSignIn.classList.remove('primary');
     oauthSignIn.classList.add('secondary');
     signOut.disabled = false;
-    fetchRepos.disabled = false;
     
     if (!document.getElementById('status').textContent) {
-      setStatus('✅ You are authenticated with GitHub!\n\n💡 Configure your default repository below.', 'success');
+      setStatus('✅ You are authenticated with GitHub!\n\n💡 Select your repository below and save settings.', 'success');
     }
   } else {
     oauthSignIn.textContent = '🔐 Sign in with GitHub';
     oauthSignIn.classList.remove('secondary');
     oauthSignIn.classList.add('primary');
     signOut.disabled = true;
-    fetchRepos.disabled = true;
+    
+    // Hide repo list if not authenticated
+    const repoListContainer = document.getElementById('repo-list-container');
+    const noReposMessage = document.getElementById('no-repos-message');
+    if (repoListContainer) {
+      repoListContainer.style.display = 'none';
+    }
+    if (noReposMessage) {
+      noReposMessage.style.display = 'block';
+    }
     
     if (!document.getElementById('status').textContent) {
       setStatus('⚠️ Not authenticated\n\n🔐 Please sign in with GitHub to get started.', 'info');
     }
   }
-}
-
-function handleRepoUrlChange() {
-  const repoUrl = document.getElementById('repo-url').value.trim();
-  const parsed = parseGitHubUrl(repoUrl);
-  
-  if (parsed) {
-    document.getElementById('owner').value = parsed.owner;
-    document.getElementById('repo').value = parsed.repo;
-  }
-}
-
-function parseGitHubUrl(url) {
-  if (!url) return null;
-  
-  // Remove trailing slashes and whitespace
-  url = url.trim().replace(/\/+$/, '');
-  
-  // Pattern 1: owner/repo
-  let match = url.match(/^([^\/\s]+)\/([^\/\s]+)$/);
-  if (match) {
-    return { owner: match[1], repo: match[2] };
-  }
-  
-  // Pattern 2: https://github.com/owner/repo or http://github.com/owner/repo
-  match = url.match(/^https?:\/\/github\.com\/([^\/\s]+)\/([^\/\s]+)/);
-  if (match) {
-    return { owner: match[1], repo: match[2] };
-  }
-  
-  // Pattern 3: github.com/owner/repo
-  match = url.match(/^github\.com\/([^\/\s]+)\/([^\/\s]+)/);
-  if (match) {
-    return { owner: match[1], repo: match[2] };
-  }
-  
-  // Pattern 4: git@github.com:owner/repo.git
-  match = url.match(/^git@github\.com:([^\/\s]+)\/([^\/\s]+?)(?:\.git)?$/);
-  if (match) {
-    return { owner: match[1], repo: match[2] };
-  }
-  
-  return null;
 }
 
 function setStatus(message, type = 'info') {

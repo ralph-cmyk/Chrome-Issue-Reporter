@@ -8,9 +8,7 @@ stores tokens securely in `chrome.storage.sync`, and submits issues via the GitH
 
 **Install from the Chrome Web Store:**
 
-Visit the [Chrome Web Store](https://chrome.google.com/webstore) and search for "Chrome Issue Reporter" or click the link below:
-
-[Install Chrome Issue Reporter](#) <!-- TODO: Add actual Chrome Web Store link -->
+Visit the [Chrome Web Store](https://chrome.google.com/webstore) and search for "Chrome Issue Reporter".
 
 After installation, you'll need to configure your GitHub OAuth App - see [Configuration](#configuration) below.
 
