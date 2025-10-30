@@ -7,27 +7,33 @@ const UNSUPPORTED_URL_PREFIXES = ['chrome://', 'chrome-extension://', 'edge://',
 
 const statusEl = document.getElementById('status');
 const titleInput = document.getElementById('title');
-const reproStepsInput = document.getElementById('repro-steps');
-const expectedInput = document.getElementById('expected');
-const actualInput = document.getElementById('actual');
+const descriptionInput = document.getElementById('description');
 const technicalContextInput = document.getElementById('technical-context');
 const contextPreviewEl = document.getElementById('context-preview');
 const lastIssueEl = document.getElementById('last-issue');
 const createButton = document.getElementById('create');
 const liveSelectButton = document.getElementById('live-select');
-const clearContextButton = document.getElementById('clear-context');
 const openOptionsLink = document.getElementById('open-options');
+const repoInfoEl = document.getElementById('repo-info');
 
 init();
 
 function init() {
   document.getElementById('issue-form').addEventListener('submit', handleSubmit);
   liveSelectButton.addEventListener('click', handleLiveSelect);
-  clearContextButton.addEventListener('click', handleClearContext);
   openOptionsLink.addEventListener('click', (event) => {
     event.preventDefault();
     chrome.runtime.openOptionsPage();
   });
+  
+  // Add Shift+Enter handler for description textarea
+  descriptionInput.addEventListener('keydown', (event) => {
+    if (event.key === 'Enter' && event.shiftKey) {
+      event.preventDefault();
+      document.getElementById('issue-form').dispatchEvent(new Event('submit'));
+    }
+  });
+  
   refresh();
 }
 
@@ -42,32 +48,33 @@ async function refresh() {
 
 async function refreshAuthState(preserveMessage = false) {
   const response = await chrome.runtime.sendMessage({ type: 'getAuthState' });
-  const authStatusEl = document.getElementById('auth-status');
   
   if (response?.success && response.authenticated) {
+    // Enable live select button when authenticated
+    liveSelectButton.disabled = false;
     if (!preserveMessage) {
-      setStatus('Ready to create issues.', 'info');
+      setStatus('', 'info');
     }
-    authStatusEl.innerHTML = '<span class="badge success">✅ Authenticated</span>';
   } else {
+    // Disable and grey out live select button when not authenticated
+    liveSelectButton.disabled = true;
     if (!preserveMessage) {
-      setStatus('Not authenticated. Configure in settings.', 'error');
+      setStatus('', 'info');
     }
-    authStatusEl.innerHTML = '<span class="badge warning">⚠️ Not authenticated</span>';
   }
 }
 
 async function loadConfig() {
   const response = await chrome.runtime.sendMessage({ type: 'getConfig' });
-  const repoStatusEl = document.getElementById('repo-status');
+  const repoNameEl = repoInfoEl.querySelector('.repo-name');
   
   if (response?.success) {
     defaultLabels = Array.isArray(response.config?.labels) ? response.config.labels : [];
     
     if (response.config?.owner && response.config?.repo) {
-      repoStatusEl.innerHTML = `<span class="badge success">📂 ${response.config.owner}/${response.config.repo}</span>`;
+      repoNameEl.textContent = `📂 ${response.config.owner}/${response.config.repo}`;
     } else {
-      repoStatusEl.innerHTML = '<span class="badge warning">⚠️ Repository not configured</span>';
+      repoNameEl.textContent = '📂 Repository not configured';
     }
   }
 }
@@ -86,12 +93,12 @@ async function loadContext() {
     }
     // Pre-fill placeholder suggestions based on context
     if (cachedContext.elementDescription) {
-      actualInput.placeholder = `e.g., The ${cachedContext.elementDescription} shows an error...`;
+      descriptionInput.placeholder = `e.g., The ${cachedContext.elementDescription} shows an error or doesn't work as expected...`;
     }
   } else {
     cachedContext = null;
     technicalContextInput.value = '';
-    contextPreviewEl.textContent = 'No captured context yet. Use "Live Select" or the context menu to collect details.';
+    contextPreviewEl.textContent = 'No captured context yet. Use "Live Select" to collect details from a page element.';
   }
 }
 
@@ -107,13 +114,16 @@ async function loadLastIssue() {
 async function handleSubmit(event) {
   event.preventDefault();
   const title = titleInput.value.trim();
-  const reproSteps = reproStepsInput.value.trim();
-  const expected = expectedInput.value.trim();
-  const actual = actualInput.value.trim();
+  const description = descriptionInput.value.trim();
   const technicalContextStr = technicalContextInput.value;
   
   if (!title) {
     setStatus('Title is required.', 'error');
+    return;
+  }
+  
+  if (!description) {
+    setStatus('Please describe what\'s wrong.', 'error');
     return;
   }
 
@@ -134,9 +144,7 @@ async function handleSubmit(event) {
       type: 'createIssue',
       payload: {
         title,
-        reproSteps,
-        expected,
-        actual,
+        description,
         context,
         labels: defaultLabels
       }
@@ -199,18 +207,6 @@ async function handleLiveSelect() {
     console.error('Live select error:', error);
     setStatus('❌ ' + (error.message || 'Failed to start live select.'), 'error');
   }
-}
-
-async function handleClearContext() {
-  await chrome.runtime.sendMessage({ type: 'clearLastContext' });
-  cachedContext = null;
-  contextPreviewEl.textContent = 'Context cleared.';
-  reproStepsInput.value = '';
-  expectedInput.value = '';
-  actualInput.value = '';
-  titleInput.value = '';
-  technicalContextInput.value = '';
-  setStatus('🗑️ Context cleared.', 'info');
 }
 
 function buildDefaultTitle(context) {
