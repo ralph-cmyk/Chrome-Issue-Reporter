@@ -32,11 +32,7 @@ jobs:
         run: npm run build
       
       - name: Create ZIP file
-        run: |
-          cd dist
-          zip -r ../chrome-issue-reporter.zip *
-          cd ..
-          echo "Created chrome-issue-reporter.zip"
+        run: (cd dist && zip -r ../chrome-issue-reporter.zip .)
       
       - name: Publish to Chrome Web Store
         uses: mnao305/chrome-extension-upload@v5.0.0
