@@ -98,14 +98,14 @@ jobs:
         with:
           tag_name: ${{ steps.version.outputs.tag }}
           name: Release ${{ steps.version.outputs.tag }}
-          files: chrome-issue-reporter-extension.zip
+          files: chrome-issue-reporter-v*.zip
           make_latest: true
           body: |
             ## Chrome Issue Reporter ${{ steps.version.outputs.tag }}
             
             ### ⚠️ IMPORTANT: Download the Correct File
             
-            **✅ Download:** `chrome-issue-reporter-extension.zip` (the built extension package)
+            **✅ Download:** `chrome-issue-reporter-v${{ steps.version.outputs.version }}.zip` (the built extension package)
             
             **❌ DO NOT download:** Source code (zip) or Source code (tar.gz) - these contain the repository structure and will NOT work with Chrome!
             

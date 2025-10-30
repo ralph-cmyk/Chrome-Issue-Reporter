@@ -3,9 +3,9 @@
   "version": "0.1.0",
   "description": "Chrome extension that captures page context and helps file GitHub issues",
   "scripts": {
-    "clean": "rm -rf dist chrome-issue-reporter.zip chrome-issue-reporter-extension.zip",
+    "clean": "rm -rf dist chrome-issue-reporter*.zip",
     "build": "npm run clean && mkdir -p dist && cp -r extension/* dist/",
-    "package": "npm run build && cd dist && zip -r ../chrome-issue-reporter-extension.zip * && cd .. && echo '\n✅ Extension packaged successfully: chrome-issue-reporter-extension.zip'",
+    "package": "npm run build && VERSION=$(node -p \"require('./extension/manifest.json').version\") && cd dist && zip -r ../chrome-issue-reporter-v${VERSION}.zip * && cd .. && echo \"\\n✅ Extension packaged successfully: chrome-issue-reporter-v${VERSION}.zip\"",
     "prerelease": "npm run package"
   },
   "repository": {

@@ -2,7 +2,7 @@
   "manifest_version": 3,
   "name": "Chrome Issue Reporter",
   "description": "Capture the current page context and file GitHub issues without leaving Chrome.",
-  "version": "0.1.0",
+  "version": "21.0.0",
   "key": "MIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8AMIIBCgKCAQEAzHMVgOfu2tHoOR0T1Ex7RpCDDspB5L0d0GNYU7WJhBQpaqDVE8mYe1BhYp1o9Zm1O4kbfwdamGS4SB8Z214pxDj+tF7R1gfU4G2Y2VBlbOTb3BpFgFJKxVlHx5g0q0MwIFEnZ3AEOgP2GkRFDGXyHk+QyIrvsZAOQS8F0mzSMg81LmzAiwo2/WhuEolK2w8WXFZ0UGsRgLPJ6UHD5zDQFDNbvlFdWHfdcGdyG9Yrb8fEoXXfB+634kpB05/mkI18fveZbR4+tK/QQzOqGglvJZc4bTCN3BQKpK5phqRvspczjUKiKdizB4664/AGqdo0Ohw2+J05keV5EsJ9MniYrQIDAQAB",
   "icons": {
     "16": "icons/icon16.png",
