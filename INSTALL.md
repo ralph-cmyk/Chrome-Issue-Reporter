@@ -23,6 +23,37 @@ The easiest way to install Chrome Issue Reporter is directly from the Chrome Web
 
 ---
 
+### Manual Installation from ZIP (When Chrome Web Store Not Available)
+
+If the extension is not yet on Chrome Web Store, you can install it manually from a ZIP file:
+
+1. **Download the ZIP file** from the [latest GitHub Release](https://github.com/ralph-cmyk/Chrome-Issue-Reporter/releases/latest)
+
+2. **Extract the ZIP file** to a folder on your computer
+   - Right-click the ZIP file and select "Extract All..." (Windows)
+   - Or double-click the ZIP file (Mac)
+   - Remember the folder location
+
+3. **Open Chrome Extensions page:**
+   - Navigate to `chrome://extensions/`
+   - Or click the menu (⋮) → More tools → Extensions
+
+4. **Enable Developer Mode:**
+   - Toggle the "Developer mode" switch in the top-right corner
+
+5. **Load the extension:**
+   - Click **Load unpacked**
+   - Navigate to the folder where you extracted the ZIP
+   - Select the folder and click **Select Folder**
+
+6. **Note the Extension ID:**
+   - After loading, you'll see an Extension ID (e.g., `abcdefghijklmnopqrstuvwxyz123456`)
+   - You'll need this for the OAuth callback URL in the next steps
+
+⚠️ **Manual installations require Developer mode and show a warning banner.** This is normal for extensions not installed from the Chrome Web Store. Once the extension is published to Chrome Web Store, you can install it from there instead.
+
+---
+
 ## Configuration
 
 After installation, you must configure the extension with your GitHub OAuth App:
