@@ -8,6 +8,9 @@ const LAST_CONTEXT_KEY = 'last_context';
 const LAST_ISSUE_KEY = 'last_issue';
 const CONTEXT_MENU_ID = 'create-github-issue';
 const MAX_SNIPPET_LENGTH = 5 * 1024; // 5 KB
+const LAST_UPDATE_CHECK_KEY = 'last_update_check';
+const UPDATE_CHECK_INTERVAL = 24 * 60 * 60 * 1000; // 24 hours in milliseconds
+const RELEASE_ZIP_PATTERN = /^chrome-issue-reporter-v[\d.]+\.zip$/;
 
 // GitHub OAuth Configuration
 const GITHUB_DEVICE_CODE_URL = 'https://github.com/login/device/code';
@@ -19,10 +22,12 @@ const GITHUB_CLIENT_ID_FALLBACK = 'Ov23liJyiD9bKVNz2X2w';
 chrome.runtime.onInstalled.addListener(async () => {
   await ensureContextMenu();
   await seedDefaultConfig();
+  await checkForUpdates(); // Check for updates on install
 });
 
 chrome.runtime.onStartup.addListener(async () => {
   await ensureContextMenu();
+  await checkForUpdates(); // Check for updates on startup
 });
 
 chrome.contextMenus.onClicked.addListener(async (info, tab) => {
@@ -460,9 +465,7 @@ async function createIssue(payload = {}) {
   // Extract user input and context
   const userInput = {
     title: payload.title?.trim() || '',
-    reproSteps: payload.reproSteps?.trim() || '',
-    expected: payload.expected?.trim() || '',
-    actual: payload.actual?.trim() || ''
+    description: payload.description?.trim() || ''
   };
   
   const context = payload.context || {};
@@ -529,3 +532,155 @@ async function requestContextFromTab(tabId) {
     throw error;
   }
 }
+
+/**
+ * Checks for updates from the GitHub repository
+ * Notifies the user if a new version is available
+ */
+async function checkForUpdates() {
+  try {
+    // Check if we've checked recently
+    const data = await chrome.storage.local.get(LAST_UPDATE_CHECK_KEY);
+    const lastCheck = data?.[LAST_UPDATE_CHECK_KEY] || 0;
+    const now = Date.now();
+    
+    if (now - lastCheck < UPDATE_CHECK_INTERVAL) {
+      console.log('Skipping update check - checked recently');
+      return;
+    }
+    
+    // Update last check time
+    await chrome.storage.local.set({ [LAST_UPDATE_CHECK_KEY]: now });
+    
+    // Get current version from manifest
+    const manifest = chrome.runtime.getManifest();
+    const currentVersion = manifest.version;
+    
+    // Fetch latest release from GitHub
+    const response = await fetch(
+      'https://api.github.com/repos/ralph-cmyk/Chrome-Issue-Reporter/releases/latest',
+      {
+        headers: {
+          'Accept': 'application/vnd.github+json',
+          'X-GitHub-Api-Version': '2022-11-28'
+        }
+      }
+    );
+    
+    if (!response.ok) {
+      console.warn('Failed to check for updates:', response.status);
+      return;
+    }
+    
+    const release = await response.json();
+    
+    if (!release || !release.tag_name) {
+      console.warn('Release data missing or invalid');
+      return;
+    }
+    
+    const latestVersion = release.tag_name.replace(/^v/, ''); // Remove 'v' prefix if present
+    
+    // Compare versions (simple string comparison for major.minor.patch)
+    if (compareVersions(latestVersion, currentVersion) > 0) {
+      // New version available
+      const downloadAsset = release.assets?.find(asset => 
+        asset.name && 
+        RELEASE_ZIP_PATTERN.test(asset.name)
+      );
+      
+      const downloadUrl = downloadAsset?.browser_download_url || release.html_url;
+      
+      // Show notification
+      chrome.notifications.create({
+        type: 'basic',
+        iconUrl: 'icons/icon128.png',
+        title: 'Chrome Issue Reporter Update Available',
+        message: `Version ${latestVersion} is available! You have ${currentVersion}. Click to download.`,
+        buttons: [
+          { title: 'Download Update' },
+          { title: 'Dismiss' }
+        ],
+        requireInteraction: true
+      }, (notificationId) => {
+        // Store the download URL for later use
+        chrome.storage.local.set({ 
+          [`notification_${notificationId}`]: { 
+            url: downloadUrl,
+            version: latestVersion
+          } 
+        });
+      });
+    } else {
+      console.log('Extension is up to date');
+    }
+  } catch (error) {
+    console.error('Update check failed:', error);
+  }
+}
+
+/**
+ * Parses a version string into an array of numeric parts
+ * @param {string} version - Version string (e.g., "21.0.0" or "21.0.0-beta.1")
+ * @returns {number[]} Array of numeric version parts
+ */
+function parseVersion(version) {
+  // Remove any pre-release identifiers (e.g., "-beta.1")
+  const cleanVersion = version.split('-')[0];
+  
+  return cleanVersion.split('.').map(p => {
+    const num = parseInt(p, 10);
+    return isNaN(num) ? 0 : num;
+  });
+}
+
+/**
+ * Compares two version strings (e.g., "21.0.0" vs "20.0.0")
+ * Returns: 1 if v1 > v2, -1 if v1 < v2, 0 if equal
+ * Handles semantic versioning with major.minor.patch format
+ */
+function compareVersions(v1, v2) {
+  const parts1 = parseVersion(v1);
+  const parts2 = parseVersion(v2);
+  
+  for (let i = 0; i < Math.max(parts1.length, parts2.length); i++) {
+    const p1 = parts1[i] || 0;
+    const p2 = parts2[i] || 0;
+    
+    if (p1 > p2) return 1;
+    if (p1 < p2) return -1;
+  }
+  
+  return 0;
+}
+
+// Handle notification button clicks
+chrome.notifications.onButtonClicked.addListener(async (notificationId, buttonIndex) => {
+  if (buttonIndex === 0) {
+    // Download button clicked
+    const data = await chrome.storage.local.get(`notification_${notificationId}`);
+    const notificationData = data?.[`notification_${notificationId}`];
+    
+    if (notificationData?.url) {
+      chrome.tabs.create({ url: notificationData.url });
+    }
+  }
+  
+  // Clear the notification
+  chrome.notifications.clear(notificationId);
+  chrome.storage.local.remove(`notification_${notificationId}`);
+});
+
+// Handle notification click
+chrome.notifications.onClicked.addListener(async (notificationId) => {
+  const data = await chrome.storage.local.get(`notification_${notificationId}`);
+  const notificationData = data?.[`notification_${notificationId}`];
+  
+  if (notificationData?.url) {
+    chrome.tabs.create({ url: notificationData.url });
+  }
+  
+  chrome.notifications.clear(notificationId);
+  chrome.storage.local.remove(`notification_${notificationId}`);
+});
+

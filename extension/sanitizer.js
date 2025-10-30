@@ -38,7 +38,7 @@ const INLINE_EVENT_PATTERN = /\s+on\w+\s*=\s*["'][^"']*["']/gi;
 /**
  * Sanitizes and builds a GitHub issue body according to the capture-sanitization policy
  * @param {Object} context - The captured page context
- * @param {Object} userInput - User-provided information (title, steps, expected, actual)
+ * @param {Object} userInput - User-provided information (title, description)
  * @returns {Object} - { title, body } formatted for GitHub
  */
 function buildSanitizedIssue(context = {}, userInput = {}) {
@@ -46,9 +46,7 @@ function buildSanitizedIssue(context = {}, userInput = {}) {
   
   // Build each section
   const header = buildHeader(context);
-  const reproSteps = buildReproSteps(userInput.reproSteps || '');
-  const expected = buildExpected(userInput.expected || '');
-  const actual = buildActual(userInput.actual || '');
+  const description = buildDescription(userInput.description || '');
   const jsError = buildJsError(context.jsError);
   const consoleLogs = buildConsoleLogs(context.consoleLogs);
   const networkSample = buildNetworkSample(context.networkRequests);
@@ -56,9 +54,7 @@ function buildSanitizedIssue(context = {}, userInput = {}) {
   
   // Add sections in order (omit empty ones)
   if (header) sections.push(header);
-  if (reproSteps) sections.push(reproSteps);
-  if (expected) sections.push(expected);
-  if (actual) sections.push(actual);
+  if (description) sections.push(description);
   if (jsError) sections.push(jsError);
   if (consoleLogs) sections.push(consoleLogs);
   if (networkSample) sections.push(networkSample);
@@ -144,54 +140,20 @@ function buildHeader(context) {
 }
 
 /**
- * Builds reproduction steps section
+ * Builds description section (what's wrong)
  */
-function buildReproSteps(steps) {
-  if (!steps || !steps.trim()) return '';
+function buildDescription(description) {
+  if (!description || !description.trim()) return '';
   
-  let content = redactText(steps);
+  let content = redactText(description);
   content = collapseWhitespace(content);
   
   if (new Blob([content]).size > LIMITS.REPRO_STEPS) {
     content = truncateToBytes(content, LIMITS.REPRO_STEPS);
-    return wrapInDetails('Reproduction Steps (truncated)', content);
+    return wrapInDetails('Description (truncated)', content);
   }
   
-  return `## Reproduction Steps\n\n${content}`;
-}
-
-/**
- * Builds expected behavior section
- */
-function buildExpected(expected) {
-  if (!expected || !expected.trim()) return '';
-  
-  let content = redactText(expected);
-  content = collapseWhitespace(content);
-  
-  if (new Blob([content]).size > LIMITS.EXPECTED) {
-    content = truncateToBytes(content, LIMITS.EXPECTED);
-    return wrapInDetails('Expected Behavior (truncated)', content);
-  }
-  
-  return `## Expected Behavior\n\n${content}`;
-}
-
-/**
- * Builds actual behavior section
- */
-function buildActual(actual) {
-  if (!actual || !actual.trim()) return '';
-  
-  let content = redactText(actual);
-  content = collapseWhitespace(content);
-  
-  if (new Blob([content]).size > LIMITS.ACTUAL) {
-    content = truncateToBytes(content, LIMITS.ACTUAL);
-    return wrapInDetails('Actual Behavior (truncated)', content);
-  }
-  
-  return `## Actual Behavior\n\n${content}`;
+  return `## Description\n\n${content}`;
 }
 
 /**
