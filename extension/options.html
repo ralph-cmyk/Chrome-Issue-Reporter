@@ -257,6 +257,63 @@
         cursor: not-allowed;
         opacity: 0.6;
       }
+      
+      .repo-list {
+        max-height: 400px;
+        overflow-y: auto;
+        border: 2px solid #e1e4e8;
+        border-radius: 8px;
+        padding: 8px;
+        background: #fafbfc;
+      }
+      
+      .repo-item {
+        display: flex;
+        align-items: center;
+        padding: 12px;
+        margin: 4px 0;
+        border-radius: 6px;
+        cursor: pointer;
+        transition: all 0.2s ease;
+        background: white;
+        border: 2px solid #e1e4e8;
+      }
+      
+      .repo-item:hover {
+        background: #f6f8ff;
+        border-color: #667eea;
+      }
+      
+      .repo-item.selected {
+        background: linear-gradient(135deg, #e3f2fd 0%, #e8eaf6 100%);
+        border-color: #667eea;
+        font-weight: 600;
+      }
+      
+      .repo-item input[type="radio"] {
+        width: auto;
+        margin: 0 12px 0 0;
+        cursor: pointer;
+      }
+      
+      .repo-item label {
+        margin: 0;
+        flex: 1;
+        cursor: pointer;
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        font-weight: 500;
+      }
+      
+      .repo-private-badge {
+        background: #ffc107;
+        color: #000;
+        padding: 2px 8px;
+        border-radius: 4px;
+        font-size: 0.75rem;
+        font-weight: 600;
+      }
     </style>
   </head>
   <body>
@@ -268,12 +325,23 @@
         <h2>🔐 GitHub Authentication</h2>
         
         <div class="info-box">
-          <strong>⚙️ OAuth App Setup Required</strong>
-          Before signing in, you must create a GitHub OAuth App and configure it below.
-          See <a href="https://github.com/ralph-cmyk/Chrome-Issue-Reporter/blob/main/SETUP-DEVICE-FLOW.md" target="_blank" class="link">SETUP-DEVICE-FLOW.md</a> for instructions.
+          <strong>📋 Quick Setup (3 steps)</strong>
+          <ol style="margin: 8px 0 0 0; padding-left: 20px; line-height: 1.8;">
+            <li><strong>Create OAuth App:</strong> Go to <a href="https://github.com/settings/developers" target="_blank" class="link">github.com/settings/developers</a> → Click "New OAuth App" → Use callback URL: <code>http://localhost</code></li>
+            <li><strong>Save Client ID:</strong> Copy your Client ID from the OAuth App page → Paste it below → Click "Save"</li>
+            <li><strong>Sign In:</strong> Click "Sign in with GitHub" → Enter the code shown → Authorize → Done! 🎉</li>
+          </ol>
+          <p style="margin-top: 12px;">
+            Need detailed help? See <a href="https://github.com/ralph-cmyk/Chrome-Issue-Reporter/blob/main/SETUP.md" target="_blank" class="link">SETUP.md</a> for step-by-step guide.
+          </p>
         </div>
         
-        <label for="client-id">GitHub OAuth App Client ID *</label>
+        <label for="client-id">
+          <span style="display: inline-flex; align-items: center; gap: 8px;">
+            Step 1: GitHub OAuth App Client ID *
+            <a href="https://github.com/settings/developers" target="_blank" style="font-size: 0.85rem; font-weight: normal;">(Create one here →)</a>
+          </span>
+        </label>
         <input 
           id="client-id" 
           name="client-id" 
@@ -320,53 +388,38 @@
 
         <div class="divider"></div>
 
-        <h2>📚 Default Repository</h2>
+        <h2>📚 Repository Selection</h2>
         <p class="hint" style="margin-top: 0;">
-          Specify the default GitHub repository where issues will be created.
+          Select the GitHub repository where issues will be created. Your repositories will load automatically after signing in.
         </p>
         
-        <div class="actions">
-          <button id="fetch-repos" type="button" class="secondary">
-            📚 Load My Repositories
-          </button>
+        <div id="repo-list-container" style="display: none;">
+          <div id="repo-list" class="repo-list">
+            <!-- Repositories will be loaded here as radio buttons -->
+          </div>
         </div>
         
-        <label for="repo-select">Select Repository</label>
-        <select id="repo-select" name="repo-select" style="display: none;">
-          <option value="">-- Choose a repository --</option>
-        </select>
-        <p class="hint" id="repo-select-hint" style="display: none;">
-          Select a repository from the dropdown, or manually enter owner/repo below.
-        </p>
-        
-        <label for="repo-url">Repository URL (or enter owner/repo below)</label>
-        <input 
-          id="repo-url" 
-          name="repo-url" 
-          type="text" 
-          placeholder="https://github.com/owner/repo or owner/repo" 
-        />
-        <p class="hint">
-          Supported formats: https://github.com/owner/repo, github.com/owner/repo, owner/repo
-        </p>
+        <div id="no-repos-message" style="display: none; padding: 16px; background: #f8f9fa; border-radius: 8px; margin: 16px 0;">
+          <p style="margin: 0; color: #666;">
+            ℹ️ No repositories loaded yet. Sign in with GitHub to see your repositories.
+          </p>
+        </div>
 
-        <label for="owner">Repository Owner</label>
-        <input id="owner" name="owner" type="text" placeholder="e.g. octocat" />
-
-        <label for="repo">Repository Name</label>
-        <input id="repo" name="repo" type="text" placeholder="e.g. hello-world" />
-
-        <label for="labels">Default Labels</label>
+        <label for="labels">Default Issue Labels</label>
         <input
           id="labels"
           name="labels"
           type="text"
-          placeholder="Comma-separated labels (e.g. bug, help wanted)"
+          placeholder="e.g., bug, created by ChromeExtension"
+          value="created by ChromeExtension"
         />
+        <p class="hint">
+          Comma-separated labels that will be applied to all created issues. Default: "created by ChromeExtension"
+        </p>
 
         <div class="actions">
           <button id="save" type="button" class="primary">
-            💾 Save Repository Settings
+            💾 Save Settings
           </button>
         </div>
       </div>

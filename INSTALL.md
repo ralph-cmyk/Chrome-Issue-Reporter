@@ -1,98 +1,25 @@
 # Installation Guide - Chrome Issue Reporter
 
-This guide provides multiple ways to install the Chrome Issue Reporter extension.
+This guide shows you how to install and configure the Chrome Issue Reporter extension.
 
-## Table of Contents
-- [Method 1: Install from Pre-built ZIP (Recommended)](#method-1-install-from-pre-built-zip-recommended)
-- [Method 2: Install from Source Code](#method-2-install-from-source-code)
-- [Method 3: Build and Package Yourself](#method-3-build-and-package-yourself)
-- [Configuration](#configuration)
-- [Troubleshooting](#troubleshooting)
+## Installation
 
----
+### Install from Chrome Web Store (Recommended)
 
-## Method 1: Install from Pre-built ZIP (Recommended)
+The easiest way to install Chrome Issue Reporter is directly from the Chrome Web Store:
 
-This is the easiest method if you have a pre-built ZIP file of the extension.
+1. Visit the [Chrome Web Store](https://chrome.google.com/webstore)
+2. Search for "Chrome Issue Reporter"
+3. Click **Add to Chrome**
+4. Confirm by clicking **Add extension**
 
-### Step 1: Download the Extension
+✅ The extension is now installed and will auto-update when new versions are released!
 
-**Option A: From GitHub Releases**
-1. Go to the [Releases page](https://github.com/ralph-cmyk/Chrome-Issue-Reporter/releases)
-2. Download the latest `chrome-issue-reporter-extension.zip` file
-   - ⚠️ **IMPORTANT:** Download the file named `chrome-issue-reporter-extension.zip`
-   - ❌ **DO NOT** download "Source code (zip)" or "Source code (tar.gz)" - these will NOT work!
-
-**Option B: From a Direct Link**
-- If someone provided you with a `chrome-issue-reporter-extension.zip` file, save it to your computer
-
-### Step 2: Extract the ZIP File
-1. Right-click on `chrome-issue-reporter-extension.zip`
-2. Select "Extract All..." (Windows) or double-click (Mac)
-3. Choose a permanent location for the extension folder (e.g., `Documents/ChromeExtensions/`)
-4. **Important:** Do NOT delete this folder after installation - Chrome needs it to run the extension
-
-### Step 3: Install in Chrome
-1. Open Chrome and navigate to `chrome://extensions/`
-2. Enable **Developer mode** by toggling the switch in the top-right corner
-3. Click the **Load unpacked** button
-4. Navigate to the extracted folder (the one containing `manifest.json`)
-5. Click **Select** (or **Open**)
-
-✅ The extension is now installed!
-
-### Step 4: Note Your Extension ID
-After installation, Chrome assigns a unique ID to your extension (e.g., `abcdefghijklmnop...`). You'll need this for configuration.
-
-Look for the ID below the extension name on the `chrome://extensions/` page.
-
----
-
-## Method 2: Install from Source Code
-
-If you cloned or downloaded the repository directly:
-
-### Step 1: Get the Source Code
-```bash
-git clone https://github.com/ralph-cmyk/Chrome-Issue-Reporter.git
-cd Chrome-Issue-Reporter
-```
-
-### Step 2: Install in Chrome
-1. Open Chrome and navigate to `chrome://extensions/`
-2. Enable **Developer mode** in the top-right corner
-3. Click **Load unpacked**
-4. Navigate to and select the `extension` folder (not the root folder)
-5. Click **Select**
-
-✅ The extension is now installed!
-
----
-
-## Method 3: Build and Package Yourself
-
-If you want to create your own distributable ZIP file:
-
-### Prerequisites
-- Node.js installed (optional, for using npm scripts)
-- OR basic command-line tools (zip)
-
-### Using npm (Recommended)
-```bash
-# From the repository root
-npm run package
-```
-
-This will create `chrome-issue-reporter-extension.zip` ready for distribution.
-
-### Manual Packaging
-```bash
-# From the repository root
-cd extension
-zip -r ../chrome-issue-reporter-extension.zip *
-```
-
-Then follow [Method 1](#method-1-install-from-pre-built-zip-recommended) to install.
+**Benefits of Chrome Web Store Installation:**
+- ✅ Automatic updates
+- ✅ No developer mode warnings
+- ✅ Simple one-click installation
+- ✅ Verified by Google
 
 ---
 
@@ -107,31 +34,26 @@ After installation, you must configure the extension with your GitHub OAuth App:
 3. Fill in the details:
    - **Application name:** Chrome Issue Reporter (or your preferred name)
    - **Homepage URL:** `https://github.com/ralph-cmyk/Chrome-Issue-Reporter` (or your preferred URL)
-   - **Authorization callback URL:** `http://localhost` (This is required by GitHub)
+   - **Authorization callback URL:** `https://<your-extension-id>.chromiumapp.org/`
+     - To find your extension ID: Go to `chrome://extensions/` and look for the ID under the extension name
+     - Example: `https://abcdefghijklmnopqrstuvwxyz123456.chromiumapp.org/`
 4. Click **Register application**
 5. Note your **Client ID** (starts with "Ov23...")
 
-### Step 2: Update Extension Configuration
+### Step 2: Configure the Extension
 
-1. Navigate to the extension folder (the one you installed)
-2. Open `background.js` in a text editor
-3. Find this line (line 15):
-   ```javascript
-   const GITHUB_CLIENT_ID = 'Ov23liJyiD9bKVNz2X2w';
-   ```
-4. Replace `'Ov23liJyiD9bKVNz2X2w'` with your own Client ID from Step 1
-5. Save the file
-6. Go to `chrome://extensions/` and click the **Reload** button for this extension
+1. Right-click the extension icon in Chrome and select **Options**
+2. Enter your GitHub OAuth App **Client ID** from Step 1
+3. Click **Save**
 
 ### Step 3: Sign In with GitHub
 
-1. Right-click the extension icon in Chrome and select **Options**
-2. Click **"Sign in with GitHub"**
-3. You'll see a verification code (e.g., "ABCD-1234")
-4. A new tab will open to GitHub's device authorization page
-5. Enter the verification code shown in the extension
-6. Click **Authorize** on GitHub
-7. Return to the extension options page - you should see a success message
+1. In the extension **Options** page, click **"Sign in with GitHub"**
+2. You'll see a verification code (e.g., "ABCD-1234")
+3. A new tab will open to GitHub's device authorization page
+4. Enter the verification code shown in the extension
+5. Click **Authorize** on GitHub
+6. Return to the extension options page - you should see a success message
 
 ### Step 4: Configure Your Repository
 
@@ -144,66 +66,56 @@ After installation, you must configure the extension with your GitHub OAuth App:
 
 ---
 
-## Troubleshooting
+## For Developers: Development Installation
 
-### Extension doesn't appear after installation
-- Make sure Developer mode is enabled in `chrome://extensions/`
-- Verify you selected the correct folder (it must contain `manifest.json`)
-- Check the Chrome developer console for errors
+If you're developing or contributing to this extension, you can install it locally:
+
+1. Clone the repository:
+   ```bash
+   git clone https://github.com/ralph-cmyk/Chrome-Issue-Reporter.git
+   cd Chrome-Issue-Reporter
+   ```
+
+2. Open Chrome and navigate to `chrome://extensions/`
+3. Enable **Developer mode** in the top-right corner
+4. Click **Load unpacked**
+5. Navigate to and select the `extension` folder (not the root folder)
+6. Click **Select**
+
+⚠️ **Note:** Development installations require Developer mode and will show a warning banner. For regular use, install from the Chrome Web Store.
+
+---
+
+## Troubleshooting
 
 ### OAuth errors
 - **"404 Not Found" or "Failed to start device flow":**
   - Your OAuth App might not exist or the Client ID is incorrect
-  - Verify your Client ID in `background.js` matches the one from your OAuth App
+  - Verify your Client ID in the extension options matches the one from your OAuth App
   - Double-check that you created an **OAuth App** (not a GitHub App - they are different!)
+  - Make sure the callback URL uses your extension ID: `https://<extension-id>.chromiumapp.org/`
+
 - **"Authorization pending" timeout:**
   - Make sure you entered the verification code on GitHub within the time limit (usually 15 minutes)
   - Check that you clicked "Authorize" on GitHub
   - Try signing in again - you'll get a new verification code
-- For OAuth changes, you may need to sign out and sign in again
 
-### Extension is disabled on restart
-- This is normal for unpacked extensions in Developer mode
-- Chrome will show a warning banner - click "Dismiss" or disable the warning
-- The extension will continue to work
+### Extension not working
+- Make sure you've completed all configuration steps
+- Check that you're signed in to GitHub in the extension options
+- Verify that a repository is configured
+- Try signing out and signing in again
 
-### Cannot find manifest.json
-- If using a ZIP file, make sure you extracted it fully
-- The folder you select must directly contain `manifest.json`, not a subfolder
-
-### Permission denied errors
-- Make sure the extension folder is in a location you have write access to
-- Avoid installing to system directories or read-only locations
-
-### Updates not applying
-- After changing any files, click the **Reload** button on `chrome://extensions/`
-- For OAuth changes, you may need to sign out and sign in again
-
----
-
-## Important Notes
-
-### Developer Mode Warning
-Chrome will show a warning that "Extensions running in Developer mode" may be disabled. This is normal for manually installed extensions. You can:
-- Dismiss the warning each time Chrome starts
-- Keep the extension enabled and working normally
-
-### No Automatic Updates
-Manually installed extensions do not auto-update. To update:
-1. Download the new version
-2. Extract to the same location (overwriting old files)
-3. Click **Reload** on `chrome://extensions/`
-
-### Security
-- Only install extensions from trusted sources
-- Review the code if you're unsure about the extension's behavior
-- This extension requires access to GitHub APIs and page content for its functionality
+### Permission denied errors when creating issues
+- Ensure you have write access to the repository you've configured
+- Check that your GitHub token hasn't expired (sign in again if needed)
+- Verify the repository owner and name are correct
 
 ---
 
 ## Next Steps
 
-After installation:
+After installation and configuration:
 1. Right-click any page and select **Create GitHub Issue from Page/Selection**
 2. The extension will capture the page context
 3. Edit the issue title and body in the popup

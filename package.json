@@ -1,12 +1,11 @@
 {
   "name": "chrome-issue-reporter",
-  "version": "0.1.0",
-  "description": "Chrome extension that captures page context and helps file GitHub issues",
+  "version": "21.0.0",
+  "description": "Chrome extension that captures page context and helps file GitHub issues directly from your browser",
   "scripts": {
     "clean": "rm -rf dist chrome-issue-reporter*.zip",
     "build": "npm run clean && mkdir -p dist && cp -r extension/* dist/",
-    "package": "npm run build && VERSION=$(node -p \"require('./extension/manifest.json').version\") && cd dist && zip -r ../chrome-issue-reporter-v${VERSION}.zip * && cd .. && echo \"\\n✅ Extension packaged successfully: chrome-issue-reporter-v${VERSION}.zip\"",
-    "prerelease": "npm run package"
+    "package": "npm run build && VERSION=$(node -p \"require('./extension/manifest.json').version\") && cd dist && zip -r ../chrome-issue-reporter-v${VERSION}.zip * && cd .. && echo \"\\n✅ Extension packaged successfully: chrome-issue-reporter-v${VERSION}.zip\""
   },
   "repository": {
     "type": "git",
@@ -17,8 +16,15 @@
     "extension",
     "github",
     "issue-reporter",
-    "manifest-v3"
+    "manifest-v3",
+    "bug-reporting",
+    "developer-tools",
+    "chrome-web-store"
   ],
-  "author": "",
-  "license": "MIT"
+  "author": "Chrome Issue Reporter Contributors",
+  "license": "MIT",
+  "bugs": {
+    "url": "https://github.com/ralph-cmyk/Chrome-Issue-Reporter/issues"
+  },
+  "homepage": "https://github.com/ralph-cmyk/Chrome-Issue-Reporter#readme"
 }
