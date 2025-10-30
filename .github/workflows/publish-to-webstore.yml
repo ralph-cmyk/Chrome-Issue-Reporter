@@ -31,10 +31,17 @@ jobs:
       - name: Build extension
         run: npm run build
       
+      - name: Create ZIP file
+        run: |
+          cd dist
+          zip -r ../chrome-issue-reporter.zip *
+          cd ..
+          echo "Created chrome-issue-reporter.zip"
+      
       - name: Publish to Chrome Web Store
         uses: mnao305/chrome-extension-upload@v5.0.0
         with:
-          file-path: dist
+          file-path: chrome-issue-reporter.zip
           extension-id: ${{ secrets.CHROME_EXTENSION_ID }}
           client-id: ${{ secrets.CHROME_CLIENT_ID }}
           client-secret: ${{ secrets.CHROME_CLIENT_SECRET }}
