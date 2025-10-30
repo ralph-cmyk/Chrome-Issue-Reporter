@@ -1,0 +1,20 @@
+Privacy Policy
+
+Chrome Issue Reporter respects your privacy and does not collect, transmit, or store any personal data beyond what is required to perform its core functionality.
+
+Data Usage
+	•	The extension captures limited page context (URL, title, and optional selected text) only when the user explicitly submits an issue.
+	•	All captured data is sent directly to GitHub through the user’s authenticated session to create an issue.
+	•	No browsing history, cookies, or analytics data are collected or stored.
+
+Storage
+	•	Only configuration data (GitHub repository name, labels, access token, and user preferences) are stored locally using Chrome Storage APIs.
+	•	This data never leaves your device and can be cleared anytime by removing the extension or using Chrome’s “Clear data” feature.
+
+Third-Party Services
+	•	The extension communicates solely with GitHub’s official API for issue creation.
+	•	No other third-party services or trackers are used.
+
+Security
+	•	All communications with GitHub occur over HTTPS.
+	•	No remote code executes without user action; all libraries are integrity-checked and open source.
