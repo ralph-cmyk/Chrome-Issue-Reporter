@@ -8,6 +8,7 @@ const LAST_CONTEXT_KEY = 'last_context';
 const LAST_ISSUE_KEY = 'last_issue';
 const CONTEXT_MENU_ID = 'create-github-issue';
 const MAX_SNIPPET_LENGTH = 5 * 1024; // 5 KB
+const SCRIPT_INITIALIZATION_DELAY = 100; // ms to wait for content script to initialize
 
 // GitHub OAuth Configuration
 const GITHUB_DEVICE_CODE_URL = 'https://github.com/login/device/code';
@@ -532,14 +533,23 @@ async function requestContextFromTab(tabId) {
         files: ['content.js']
       });
       
-      // Wait a bit for the script to initialize
-      await new Promise(resolve => setTimeout(resolve, 100));
+      // Wait for the script to initialize
+      await new Promise(resolve => setTimeout(resolve, SCRIPT_INITIALIZATION_DELAY));
       
       // Try sending the message again
-      return await chrome.tabs.sendMessage(tabId, { type: 'captureContext' });
+      try {
+        return await chrome.tabs.sendMessage(tabId, { type: 'captureContext' });
+      } catch (messageError) {
+        console.error('Content script injected but failed to respond', messageError);
+        throw new Error('Content script initialization failed. The page may not support extensions or may be loading.');
+      }
     } catch (injectError) {
-      console.error('Unable to inject content script or retrieve context from tab', injectError);
-      throw injectError;
+      // Check if this is a script injection error or the inner message error
+      if (injectError.message && injectError.message.includes('initialization failed')) {
+        throw injectError;
+      }
+      console.error('Unable to inject content script', injectError);
+      throw new Error('Cannot access this page. The page may be restricted or protected.');
     }
   }
 }
