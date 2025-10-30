@@ -51,6 +51,17 @@ jobs:
           refresh-token: ${{ secrets.CHROME_REFRESH_TOKEN }}
           publish: true
       
+      - name: Determine installation message
+        id: install_msg
+        run: |
+          if [ "${{ steps.webstore_upload.outcome }}" == "success" ]; then
+            echo "method=Install directly from the [Chrome Web Store](https://chrome.google.com/webstore) - search for \"Chrome Issue Reporter\"" >> "$GITHUB_OUTPUT"
+            echo "updates=**🎉 Automatic Updates:** This version has been automatically published to the Chrome Web Store. All users will receive this update automatically within a few hours." >> "$GITHUB_OUTPUT"
+          else
+            echo "method=Download the ZIP file below and install manually (Chrome Web Store not yet configured)" >> "$GITHUB_OUTPUT"
+            echo "updates=**📦 Manual Installation Required:** This extension is not yet published to the Chrome Web Store. Follow the installation instructions in INSTALL.md." >> "$GITHUB_OUTPUT"
+          fi
+      
       - name: Create GitHub Release
         uses: softprops/action-gh-release@v2
         with:
@@ -61,9 +72,9 @@ jobs:
             
             ### ✅ Installation
             
-            ${{ steps.webstore_upload.outcome == 'success' && 'Install directly from the [Chrome Web Store](https://chrome.google.com/webstore) - search for "Chrome Issue Reporter"' || 'Download the ZIP file below and install manually (Chrome Web Store not yet configured)' }}
+            ${{ steps.install_msg.outputs.method }}
             
-            ${{ steps.webstore_upload.outcome == 'success' && '**🎉 Automatic Updates:** This version has been automatically published to the Chrome Web Store. All users will receive this update automatically within a few hours.' || '**📦 Manual Installation Required:** This extension is not yet published to the Chrome Web Store. Follow the installation instructions in INSTALL.md.' }}
+            ${{ steps.install_msg.outputs.updates }}
             
             ### Configuration Required
             
