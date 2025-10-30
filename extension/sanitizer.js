@@ -131,9 +131,6 @@ function buildHeader(context) {
   // Viewport
   if (context.viewport) {
     parts.push(`**Viewport:** ${context.viewport}`);
-  } else if (typeof window !== 'undefined') {
-    const viewport = `${window.innerWidth || 0}x${window.innerHeight || 0}`;
-    parts.push(`**Viewport:** ${viewport}`);
   }
   
   let header = parts.join('\n');
@@ -448,7 +445,7 @@ function wrapInDetails(summary, content) {
 }
 
 /**
- * Truncates text to specified byte size
+ * Truncates text to specified byte size (UTF-8 safe)
  */
 function truncateToBytes(text, maxBytes) {
   if (!text) return '';
@@ -460,23 +457,13 @@ function truncateToBytes(text, maxBytes) {
     return text;
   }
   
-  // Binary search for the right character position
-  let low = 0;
-  let high = text.length;
+  // Decode with option to ignore incomplete sequences at the end
+  const decoder = new TextDecoder('utf-8', { fatal: false });
+  const truncated = decoder.decode(encoded.slice(0, maxBytes));
   
-  while (low < high) {
-    const mid = Math.floor((low + high + 1) / 2);
-    const slice = text.substring(0, mid);
-    const sliceBytes = encoder.encode(slice).length;
-    
-    if (sliceBytes <= maxBytes) {
-      low = mid;
-    } else {
-      high = mid - 1;
-    }
-  }
-  
-  return text.substring(0, low);
+  // If the last character might be incomplete, remove it to be safe
+  // This ensures we don't have partial multi-byte characters
+  return truncated.replace(/[\uFFFD]+$/, ''); // Remove replacement characters
 }
 
 /**
@@ -504,7 +491,6 @@ function generateContextHash(context) {
   return Math.abs(hash).toString(16).padStart(8, '0');
 }
 
-// Export for use in background.js
-if (typeof module !== 'undefined' && module.exports) {
-  module.exports = { buildSanitizedIssue, sanitizeTitle, redactText };
-}
+// Export for use in background.js (ES module)
+export { buildSanitizedIssue, sanitizeTitle, redactText };
+

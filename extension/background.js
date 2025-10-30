@@ -1,5 +1,5 @@
 // Import sanitization utility
-importScripts('sanitizer.js');
+import { buildSanitizedIssue } from './sanitizer.js';
 
 const TOKEN_KEY = 'github_token';
 const CONFIG_KEY = 'repo_config';
