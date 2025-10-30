@@ -73,6 +73,7 @@ window.addEventListener(
         source: event.filename,
         line: event.lineno,
         column: event.colno,
+        stack: event.error?.stack || '',
         timestamp: Date.now()
       };
     }
@@ -112,24 +113,16 @@ function collectContext(selectedElement = null) {
     url: window.location.href,
     title: document.title,
     userAgent: navigator.userAgent,
+    viewport: `${window.innerWidth || 0}x${window.innerHeight || 0}`,
     selectedText,
     htmlSnippet,
     scriptSnippet,
     cssSelector,
     elementDescription,
     jsError: lastJsError,
-    consoleLogs: getRecentConsoleLogs(),
+    consoleLogs: consoleLogs.slice(-50), // Return as array, not formatted string
     timestamp: Date.now()
   };
-}
-
-function getRecentConsoleLogs() {
-  // Get last 20 logs for the issue
-  const recentLogs = consoleLogs.slice(-20);
-  return recentLogs.map(log => {
-    const time = new Date(log.timestamp).toISOString();
-    return `[${time}] [${log.type}] ${log.message}`;
-  }).join('\n');
 }
 
 function generateCSSSelector(element) {
@@ -266,7 +259,7 @@ function createOverlay() {
     background: rgba(0, 0, 0, 0.05) !important;
     z-index: 2147483646 !important;
     cursor: crosshair !important;
-    pointer-events: all !important;
+    pointer-events: none !important;
   `;
   document.documentElement.appendChild(overlayDiv);
 }

@@ -1,3 +1,6 @@
+// Import sanitization utility
+import { buildSanitizedIssue } from './sanitizer.js';
+
 const TOKEN_KEY = 'github_token';
 const CONFIG_KEY = 'repo_config';
 const OAUTH_CONFIG_KEY = 'oauth_config';
@@ -454,11 +457,22 @@ async function createIssue(payload = {}) {
     throw new Error('Repository configuration is incomplete. Please configure owner and repo in settings.');
   }
 
-  const title = payload.title?.trim();
-  const body = truncateBody(payload.body || '');
+  // Extract user input and context
+  const userInput = {
+    title: payload.title?.trim() || '',
+    reproSteps: payload.reproSteps?.trim() || '',
+    expected: payload.expected?.trim() || '',
+    actual: payload.actual?.trim() || ''
+  };
+  
+  const context = payload.context || {};
+  
+  // Build sanitized issue using the sanitizer
+  const sanitized = buildSanitizedIssue(context, userInput);
+  
   const requestLabels = Array.isArray(payload.labels) ? payload.labels : labels || [];
 
-  if (!title) {
+  if (!sanitized.title) {
     throw new Error('Issue title is required.');
   }
 
@@ -471,8 +485,8 @@ async function createIssue(payload = {}) {
       'X-GitHub-Api-Version': '2022-11-28'
     },
     body: JSON.stringify({
-      title,
-      body,
+      title: sanitized.title,
+      body: sanitized.body,
       labels: requestLabels
     })
   });
@@ -497,16 +511,6 @@ async function createIssue(payload = {}) {
   const summary = { html_url: issue.html_url, number: issue.number, title: issue.title };
   await chrome.storage.local.set({ [LAST_ISSUE_KEY]: summary });
   return summary;
-}
-
-function truncateBody(body) {
-  if (!body) {
-    return body;
-  }
-  if (body.length <= MAX_SNIPPET_LENGTH * 3) {
-    return body;
-  }
-  return `${body.slice(0, MAX_SNIPPET_LENGTH * 3)}\n… (truncated)`;
 }
 
 async function safeParseJson(response) {
