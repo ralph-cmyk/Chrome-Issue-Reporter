@@ -336,8 +336,14 @@
         <label for="title">📝 Issue Title</label>
         <input id="title" type="text" required placeholder="Describe the issue briefly..." />
 
-        <label for="body">📄 What's Wrong?</label>
-        <textarea id="body" placeholder="Describe what's wrong with the selected element or page..."></textarea>
+        <label for="repro-steps">🔄 Reproduction Steps (optional)</label>
+        <textarea id="repro-steps" placeholder="1. Go to...\n2. Click on...\n3. See error..." style="min-height: 80px;"></textarea>
+
+        <label for="expected">✅ Expected Behavior (optional)</label>
+        <textarea id="expected" placeholder="What should happen..." style="min-height: 60px;"></textarea>
+
+        <label for="actual">❌ Actual Behavior (optional)</label>
+        <textarea id="actual" placeholder="What actually happens..." style="min-height: 60px;"></textarea>
         
         <input type="hidden" id="technical-context" />
 

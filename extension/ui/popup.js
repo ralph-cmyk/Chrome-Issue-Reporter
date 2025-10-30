@@ -7,7 +7,9 @@ const UNSUPPORTED_URL_PREFIXES = ['chrome://', 'chrome-extension://', 'edge://',
 
 const statusEl = document.getElementById('status');
 const titleInput = document.getElementById('title');
-const bodyInput = document.getElementById('body');
+const reproStepsInput = document.getElementById('repro-steps');
+const expectedInput = document.getElementById('expected');
+const actualInput = document.getElementById('actual');
 const technicalContextInput = document.getElementById('technical-context');
 const contextPreviewEl = document.getElementById('context-preview');
 const lastIssueEl = document.getElementById('last-issue');
@@ -77,14 +79,14 @@ async function loadContext() {
     contextPreviewEl.textContent = formatContextPreview(cachedContext);
     
     // Store technical context in hidden field
-    technicalContextInput.value = buildTechnicalContext(cachedContext);
+    technicalContextInput.value = JSON.stringify(cachedContext);
     
     if (!titleInput.value) {
       titleInput.value = buildDefaultTitle(cachedContext);
     }
-    // Don't pre-fill body - let user add their feedback
-    if (!bodyInput.value && cachedContext.elementDescription) {
-      bodyInput.placeholder = `Describe what's wrong with: ${cachedContext.elementDescription}`;
+    // Pre-fill placeholder suggestions based on context
+    if (cachedContext.elementDescription) {
+      actualInput.placeholder = `e.g., The ${cachedContext.elementDescription} shows an error...`;
     }
   } else {
     cachedContext = null;
@@ -105,26 +107,24 @@ async function loadLastIssue() {
 async function handleSubmit(event) {
   event.preventDefault();
   const title = titleInput.value.trim();
-  const userFeedback = bodyInput.value.trim();
-  const technicalContext = technicalContextInput.value;
+  const reproSteps = reproStepsInput.value.trim();
+  const expected = expectedInput.value.trim();
+  const actual = actualInput.value.trim();
+  const technicalContextStr = technicalContextInput.value;
   
   if (!title) {
     setStatus('Title is required.', 'error');
     return;
   }
 
-  // Combine user feedback with technical context
-  let fullBody = '';
-  if (userFeedback) {
-    fullBody = `## Issue Description\n\n${userFeedback}\n\n`;
-  }
-  if (technicalContext) {
-    fullBody += `---\n\n## Technical Context\n\n${technicalContext}`;
-  }
-  
-  // If no content at all, provide a default message
-  if (!fullBody) {
-    fullBody = 'No description provided.';
+  // Parse the context
+  let context = null;
+  try {
+    if (technicalContextStr) {
+      context = JSON.parse(technicalContextStr);
+    }
+  } catch (e) {
+    console.warn('Failed to parse technical context:', e);
   }
 
   setLoading(true);
@@ -134,7 +134,10 @@ async function handleSubmit(event) {
       type: 'createIssue',
       payload: {
         title,
-        body: fullBody,
+        reproSteps,
+        expected,
+        actual,
+        context,
         labels: defaultLabels
       }
     });
@@ -202,8 +205,9 @@ async function handleClearContext() {
   await chrome.runtime.sendMessage({ type: 'clearLastContext' });
   cachedContext = null;
   contextPreviewEl.textContent = 'Context cleared.';
-  bodyInput.value = '';
-  bodyInput.placeholder = "Describe what's wrong with the selected element or page...";
+  reproStepsInput.value = '';
+  expectedInput.value = '';
+  actualInput.value = '';
   titleInput.value = '';
   technicalContextInput.value = '';
   setStatus('🗑️ Context cleared.', 'info');
@@ -220,78 +224,6 @@ function buildDefaultTitle(context) {
     return `Issue: ${context.title}`;
   }
   return `Issue for ${context.url}`;
-}
-
-function buildTechnicalContext(context) {
-  if (!context) {
-    return '';
-  }
-  const lines = [];
-  
-  lines.push('### Page Information');
-  lines.push(`**URL:** ${context.url || 'N/A'}`);
-  lines.push(`**Page Title:** ${context.title || 'N/A'}`);
-  lines.push(`**User Agent:** ${context.userAgent || 'N/A'}`);
-  lines.push('');
-  
-  if (context.elementDescription) {
-    lines.push('### Selected Element');
-    lines.push(`**Element:** ${context.elementDescription}`);
-    if (context.cssSelector) {
-      lines.push(`**CSS Selector:** \`${context.cssSelector}\``);
-    }
-    lines.push('');
-  }
-  
-  if (context.selectedText) {
-    lines.push('### Selected Text');
-    lines.push(context.selectedText);
-    lines.push('');
-  }
-  
-  if (context.htmlSnippet) {
-    lines.push('### HTML Snippet');
-    lines.push('```html');
-    lines.push(context.htmlSnippet);
-    lines.push('```');
-    lines.push('');
-  }
-  
-  if (context.scriptSnippet) {
-    lines.push('### JavaScript');
-    lines.push('```javascript');
-    lines.push(context.scriptSnippet);
-    lines.push('```');
-    lines.push('');
-  }
-  
-  if (context.jsError) {
-    lines.push('### Last JavaScript Error');
-    lines.push('```');
-    lines.push(`${context.jsError.message || 'Unknown error'}`);
-    if (context.jsError.source) {
-      lines.push(`Source: ${context.jsError.source}:${context.jsError.line || 0}:${context.jsError.column || 0}`);
-    }
-    lines.push('Timestamp: ' + new Date(context.jsError.timestamp).toISOString());
-    lines.push('```');
-    lines.push('');
-  }
-  
-  if (context.consoleLogs) {
-    lines.push('### Console Logs (Recent)');
-    lines.push('```');
-    lines.push(context.consoleLogs || 'No console logs captured');
-    lines.push('```');
-    lines.push('');
-  }
-  
-  return lines.join('\n');
-}
-
-function buildIssueBody(context) {
-  // This is kept for backwards compatibility with context menu
-  // but now we separate user feedback from technical context
-  return buildTechnicalContext(context);
 }
 
 function formatContextPreview(context) {
@@ -315,10 +247,9 @@ function formatContextPreview(context) {
   if (context.jsError) {
     parts.push(`\nLast error: ${context.jsError.message}`);
   }
-  if (context.consoleLogs) {
-    const logLines = context.consoleLogs.split('\n').filter(l => l.trim());
-    if (logLines.length > 0) {
-      parts.push(`\n${logLines.length} console log(s) captured.`);
+  if (context.consoleLogs && Array.isArray(context.consoleLogs)) {
+    if (context.consoleLogs.length > 0) {
+      parts.push(`\n${context.consoleLogs.length} console log(s) captured.`);
     }
   }
   
