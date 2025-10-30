@@ -324,19 +324,31 @@ function buildDomSnippet(htmlSnippet) {
 
 /**
  * Sanitizes DOM snippet: removes scripts, styles, event handlers, keeps id/class/data-*
+ * 
+ * SECURITY NOTE: This sanitization is for DISPLAY purposes in a GitHub issue markdown
+ * code block, NOT for preventing XSS in HTML execution. GitHub will apply its own
+ * sanitization when rendering the issue. The purpose here is to:
+ * 1. Reduce noise (remove scripts/styles that aren't useful for debugging)
+ * 2. Remove non-deterministic attributes
+ * 3. Keep size under control
+ * 
+ * The regex patterns here are intentionally simple because:
+ * - The output is wrapped in markdown code blocks (```html)
+ * - GitHub will sanitize it again before rendering
+ * - We prioritize size reduction over perfect HTML parsing
  */
 function sanitizeDomSnippet(html) {
   if (!html) return '';
   
   let sanitized = html;
   
-  // Remove script tags and their content
+  // Remove script tags and their content (simple regex, sufficient for code block display)
   sanitized = sanitized.replace(/<script\b[^<]*(?:(?!<\/script>)<[^<]*)*<\/script>/gi, '');
   
-  // Remove style tags and their content
+  // Remove style tags and their content (simple regex, sufficient for code block display)
   sanitized = sanitized.replace(/<style\b[^<]*(?:(?!<\/style>)<[^<]*)*<\/style>/gi, '');
   
-  // Remove inline event handlers (on* attributes)
+  // Remove inline event handlers (on* attributes) - for noise reduction, not XSS prevention
   sanitized = sanitized.replace(INLINE_EVENT_PATTERN, '');
   
   // Remove non-deterministic attributes
