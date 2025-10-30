@@ -4,18 +4,15 @@ A Chrome extension (Manifest V3) that captures the current page context and help
 issues without leaving the browser. The extension uses GitHub OAuth for authentication,
 stores tokens securely in `chrome.storage.sync`, and submits issues via the GitHub REST API.
 
-## 🚀 Quick Installation
+## 🚀 Installation
 
-**Want to install this extension? It's easy!**
+**Install from the Chrome Web Store:**
 
-1. **Download:** Get the latest `chrome-issue-reporter-extension.zip` from [Releases](https://github.com/ralph-cmyk/Chrome-Issue-Reporter/releases) or [build it yourself](#building-from-source)
-   - ⚠️ **Important:** Download the `-extension.zip` file, NOT the "Source code" archives!
-2. **Extract:** Unzip to a permanent location on your computer
-3. **Install:** Open `chrome://extensions/`, enable Developer mode, click "Load unpacked", and select the extracted folder
-4. **Configure:** Create a GitHub OAuth App and configure the extension with your Client ID
+Visit the [Chrome Web Store](https://chrome.google.com/webstore) and search for "Chrome Issue Reporter" or click the link below:
 
-📖 **For detailed step-by-step instructions, see [INSTALL.md](INSTALL.md)**  
-⚡ **For a quick 7-minute setup guide, see [QUICKSTART.md](QUICKSTART.md)**
+[Install Chrome Issue Reporter](#) <!-- TODO: Add actual Chrome Web Store link -->
+
+After installation, you'll need to configure your GitHub OAuth App - see [Configuration](#configuration) below.
 
 ## ✨ Features
 
@@ -85,29 +82,37 @@ Chrome-Issue-Reporter/
 
 ## Configuration
 
-After installation, you need to configure the extension:
+After installation from the Chrome Web Store, you need to configure the extension:
 
 1. **Create a GitHub OAuth App (REQUIRED):**
-   - This extension uses GitHub OAuth for authentication
-   - You MUST create an OAuth App
-   - See [INSTALL.md](INSTALL.md) for step-by-step instructions
+   - Go to [GitHub Settings → Developer settings → OAuth Apps](https://github.com/settings/developers)
+   - Click **New OAuth App**
+   - Fill in the details:
+     - **Application name:** Chrome Issue Reporter (or your preferred name)
+     - **Homepage URL:** `https://github.com/ralph-cmyk/Chrome-Issue-Reporter`
+     - **Authorization callback URL:** `https://<your-extension-id>.chromiumapp.org/` (replace with your extension ID from chrome://extensions/)
+   - Click **Register application**
+   - Note your **Client ID** (starts with "Ov23...")
 
-2. **Sign in with GitHub:**
+2. **Configure the Extension:**
+   - Right-click the extension icon and select **Options**
+   - Enter your GitHub OAuth App **Client ID** in the options page
+   - Click **Save**
+
+3. **Sign in with GitHub:**
    - Open the extension's **Options** page
    - Click **"Sign in with GitHub"** to start the OAuth flow
    - You'll receive a code to enter on GitHub.com
    - After authorization, you're ready to go!
 
-3. **Select a Repository:**
+4. **Select a Repository:**
    - After signing in, click **"Load My Repositories"**
    - Choose the repository where you want to create issues from the dropdown
    - Or manually enter the repository owner and name
 
-4. **Start Using:**
+5. **Start Using:**
    - Right-click on any page and select **"Create GitHub Issue from Page/Selection"**
    - Review and submit your issue!
-
-📖 **See [INSTALL.md](INSTALL.md) for detailed setup instructions**
 
 ## Using the extension
 
@@ -135,11 +140,18 @@ Captured page context (URL, selection, snippets, and last error message) is stor
 submit or clear it. OAuth tokens are only stored inside Chrome’s managed storage. No data is sent to
 third-party services other than GitHub APIs during authentication and issue creation.
 
-## Building from Source
+## For Developers
 
-Want to build the extension yourself or contribute? Here's how:
+### Development Installation
+1. Clone this repository
+2. Open `chrome://extensions/` in Chrome
+3. Enable Developer mode
+4. Click "Load unpacked" and select the `extension/` directory
 
-### Quick Build
+### Building for Chrome Web Store
+
+To build a production-ready package for the Chrome Web Store:
+
 ```bash
 # Clone the repository
 git clone https://github.com/ralph-cmyk/Chrome-Issue-Reporter.git
@@ -149,27 +161,15 @@ cd Chrome-Issue-Reporter
 npm run package
 ```
 
-This creates `chrome-issue-reporter-extension.zip` ready for distribution or installation.
+This creates a ZIP file ready for Chrome Web Store submission.
+
+**Automated Publishing:**
+When changes are merged to the `main` branch, GitHub Actions automatically builds and publishes the extension to the Chrome Web Store, ensuring all users receive updates automatically.
 
 ### Available Scripts
 - `npm run clean` - Remove build artifacts
 - `npm run build` - Build extension to `dist/` folder
-- `npm run package` - Build and create ZIP file
-
-### Manual Build
-If you don't have Node.js:
-```bash
-cd extension
-zip -r ../chrome-issue-reporter-extension.zip *
-```
-
-## For Developers
-
-### Development Installation
-1. Clone this repository
-2. Open `chrome://extensions/` in Chrome
-3. Enable Developer mode
-4. Click "Load unpacked" and select the `extension/` directory
+- `npm run package` - Build and create ZIP file for Chrome Web Store
 
 ### Testing Changes
 After making changes:

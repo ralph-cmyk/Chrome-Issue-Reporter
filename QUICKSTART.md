@@ -2,55 +2,39 @@
 
 Get started with Chrome Issue Reporter in just a few minutes!
 
-## 📥 Installation (2 minutes)
+## 📥 Installation (1 minute)
 
-### Step 1: Get the Extension
-Download `chrome-issue-reporter-extension.zip` from [Releases](https://github.com/ralph-cmyk/Chrome-Issue-Reporter/releases)
-
-> ⚠️ **Important:** Download `chrome-issue-reporter-extension.zip`, NOT the source code archives!
-
-### Step 2: Extract
-Unzip the file to a **permanent location** (e.g., `Documents/ChromeExtensions/`)
-
-> ⚠️ Don't delete this folder - Chrome needs it!
-
-### Step 3: Load in Chrome
-1. Open Chrome → `chrome://extensions/`
-2. Toggle **Developer mode** (top-right) → ON
-3. Click **Load unpacked**
-4. Select the extracted folder
-5. ✅ Done!
+### Install from Chrome Web Store
+1. Visit the [Chrome Web Store](https://chrome.google.com/webstore)
+2. Search for **"Chrome Issue Reporter"**
+3. Click **Add to Chrome**
+4. Click **Add extension** to confirm
+5. ✅ Done! The extension will auto-update automatically.
 
 ## ⚙️ Configuration (5 minutes)
 
-### Step 1: Create GitHub OAuth App
+### Step 1: Create GitHub OAuth App (2 minutes)
 1. Go to: https://github.com/settings/developers
 2. Click **New OAuth App**
 3. Fill in:
    - **Name:** Chrome Issue Reporter
    - **Homepage:** https://github.com/ralph-cmyk/Chrome-Issue-Reporter
-   - **Callback URL:** `http://localhost` (required by GitHub)
+   - **Callback URL:** `https://<your-extension-id>.chromiumapp.org/`
+     - Get your extension ID from `chrome://extensions/`
 4. Click **Register application**
 5. Copy your **Client ID** (starts with "Ov23...")
 
-### Step 2: Configure Extension
-1. Open the extracted extension folder
-2. Edit `background.js` in a text editor
-3. Find this line (line 15):
-   ```javascript
-   const GITHUB_CLIENT_ID = 'Ov23liJyiD9bKVNz2X2w';
-   ```
-4. Replace with your Client ID from Step 1
-5. Save the file
-6. Go to `chrome://extensions/` and click **Reload** on the extension
-
-### Step 3: Sign In
+### Step 2: Configure Extension (1 minute)
 1. Right-click the extension icon → select **Options**
-2. Click **"Sign in with GitHub"**
-3. Copy the verification code shown
-4. Enter it on the GitHub page that opens
-5. Click **Authorize**
-6. ✅ Ready to use!
+2. Paste your **Client ID** from Step 1
+3. Click **Save**
+
+### Step 3: Sign In (2 minutes)
+1. In the **Options** page, click **"Sign in with GitHub"**
+2. Copy the verification code shown
+3. Enter it on the GitHub page that opens
+4. Click **Authorize**
+5. ✅ Ready to use!
 
 ## 🎯 Usage (30 seconds)
 
@@ -69,4 +53,4 @@ Unzip the file to a **permanent location** (e.g., `Documents/ChromeExtensions/`)
 
 ---
 
-**Total setup time: ~7 minutes** ⏱️
+**Total setup time: ~6 minutes** ⏱️
