@@ -2,6 +2,12 @@
 
 This document explains how to set up automatic publishing to the Chrome Web Store via GitHub Actions.
 
+## ⚠️ Important: First-Time Manual Submission Required
+
+**Before this automated workflow can function, you MUST manually upload and publish your extension to the Chrome Web Store at least once.** The automated publishing only works for updating existing extensions.
+
+If you haven't published your extension yet, skip to the "First-Time Manual Submission" section in the Troubleshooting area at the bottom of this document.
+
 ## Prerequisites
 
 1. A published extension on the Chrome Web Store
@@ -131,6 +137,51 @@ Once published via the Chrome Web Store:
 - **No User Action Required:** Updates install silently without user interaction
 
 ## Troubleshooting
+
+### "Response code 404 (Not Found)" error
+
+This is the most common error and typically means:
+
+1. **Extension not yet published** (MOST COMMON)
+   - The extension must be **manually submitted and published** to Chrome Web Store first
+   - Automated publishing only works for updating existing extensions
+   - See "First-Time Manual Submission" section below
+
+2. **Incorrect Extension ID**
+   - Verify `CHROME_EXTENSION_ID` matches your published extension
+   - Get the correct ID from Chrome Web Store Developer Dashboard
+   - Extension IDs are 32 characters long (e.g., `abcdefghijklmnopqrstuvwxyz123456`)
+
+3. **Extension removed or suspended**
+   - Check Chrome Web Store Developer Dashboard for extension status
+   - Ensure the extension hasn't been removed or suspended
+
+### First-Time Manual Submission
+
+**⚠️ IMPORTANT:** Before automated publishing can work, you MUST manually submit the extension once:
+
+1. Build the extension:
+   ```bash
+   npm run build
+   npm run package
+   ```
+
+2. Go to [Chrome Web Store Developer Dashboard](https://chrome.google.com/webstore/devconsole)
+
+3. Click "New Item" and upload the ZIP file
+
+4. Fill in all required store listing information:
+   - Name, description, screenshots
+   - Category and language
+   - Privacy policy URL
+
+5. Submit for review and wait for approval
+
+6. Once published, copy the Extension ID
+
+7. Configure GitHub secrets (see section 5 above)
+
+8. Now automated publishing will work on future updates!
 
 ### "Invalid refresh token" error
 - The refresh token may have expired

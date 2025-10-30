@@ -162,7 +162,14 @@ npm run package
 This creates a ZIP file ready for Chrome Web Store submission.
 
 **Automated Publishing:**
-When changes are merged to the `main` branch, GitHub Actions automatically builds and publishes the extension to the Chrome Web Store, ensuring all users receive updates automatically.
+
+The repository includes a GitHub Actions workflow that:
+- Automatically builds the extension when changes are pushed to `main`
+- Creates a GitHub Release with the ZIP file for manual installation
+- **Attempts** to publish to Chrome Web Store (if configured)
+- Continues workflow even if Web Store upload fails (e.g., for first-time setup)
+
+**Note:** The first submission to Chrome Web Store must be done manually. After that, the automated workflow can update existing extensions. See [WEBSTORE_SETUP.md](WEBSTORE_SETUP.md) for detailed configuration instructions.
 
 ### Available Scripts
 - `npm run clean` - Remove build artifacts
