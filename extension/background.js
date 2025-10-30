@@ -10,6 +10,7 @@ const CONTEXT_MENU_ID = 'create-github-issue';
 const MAX_SNIPPET_LENGTH = 5 * 1024; // 5 KB
 const LAST_UPDATE_CHECK_KEY = 'last_update_check';
 const UPDATE_CHECK_INTERVAL = 24 * 60 * 60 * 1000; // 24 hours in milliseconds
+const RELEASE_ZIP_PATTERN = /^chrome-issue-reporter-v[\d.]+\.zip$/;
 
 // GitHub OAuth Configuration
 const GITHUB_DEVICE_CODE_URL = 'https://github.com/login/device/code';
@@ -585,7 +586,7 @@ async function checkForUpdates() {
       // New version available
       const downloadAsset = release.assets?.find(asset => 
         asset.name && 
-        asset.name.match(/^chrome-issue-reporter-v[\d.]+\.zip$/)
+        RELEASE_ZIP_PATTERN.test(asset.name)
       );
       
       const downloadUrl = downloadAsset?.browser_download_url || release.html_url;
@@ -619,24 +620,28 @@ async function checkForUpdates() {
 }
 
 /**
+ * Parses a version string into an array of numeric parts
+ * @param {string} version - Version string (e.g., "21.0.0" or "21.0.0-beta.1")
+ * @returns {number[]} Array of numeric version parts
+ */
+function parseVersion(version) {
+  // Remove any pre-release identifiers (e.g., "-beta.1")
+  const cleanVersion = version.split('-')[0];
+  
+  return cleanVersion.split('.').map(p => {
+    const num = parseInt(p, 10);
+    return isNaN(num) ? 0 : num;
+  });
+}
+
+/**
  * Compares two version strings (e.g., "21.0.0" vs "20.0.0")
  * Returns: 1 if v1 > v2, -1 if v1 < v2, 0 if equal
  * Handles semantic versioning with major.minor.patch format
  */
 function compareVersions(v1, v2) {
-  // Remove any pre-release identifiers (e.g., "-beta.1")
-  const cleanV1 = v1.split('-')[0];
-  const cleanV2 = v2.split('-')[0];
-  
-  const parts1 = cleanV1.split('.').map(p => {
-    const num = parseInt(p, 10);
-    return isNaN(num) ? 0 : num;
-  });
-  
-  const parts2 = cleanV2.split('.').map(p => {
-    const num = parseInt(p, 10);
-    return isNaN(num) ? 0 : num;
-  });
+  const parts1 = parseVersion(v1);
+  const parts2 = parseVersion(v2);
   
   for (let i = 0; i < Math.max(parts1.length, parts2.length); i++) {
     const p1 = parts1[i] || 0;
