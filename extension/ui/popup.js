@@ -30,7 +30,7 @@ function init() {
   descriptionInput.addEventListener('keydown', (event) => {
     if (event.key === 'Enter' && event.shiftKey) {
       event.preventDefault();
-      document.getElementById('issue-form').dispatchEvent(new Event('submit'));
+      document.getElementById('issue-form').dispatchEvent(new Event('submit', { bubbles: true }));
     }
   });
   
@@ -52,12 +52,14 @@ async function refreshAuthState(preserveMessage = false) {
   if (response?.success && response.authenticated) {
     // Enable live select button when authenticated
     liveSelectButton.disabled = false;
+    liveSelectButton.setAttribute('aria-label', 'Live Select Element - Click to select an element on the page');
     if (!preserveMessage) {
       setStatus('', 'info');
     }
   } else {
     // Disable and grey out live select button when not authenticated
     liveSelectButton.disabled = true;
+    liveSelectButton.setAttribute('aria-label', 'Live Select Element - Not authenticated. Please sign in from settings.');
     if (!preserveMessage) {
       setStatus('', 'info');
     }

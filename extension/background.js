@@ -572,14 +572,23 @@ async function checkForUpdates() {
     }
     
     const release = await response.json();
+    
+    if (!release || !release.tag_name) {
+      console.warn('Release data missing or invalid');
+      return;
+    }
+    
     const latestVersion = release.tag_name.replace(/^v/, ''); // Remove 'v' prefix if present
     
     // Compare versions (simple string comparison for major.minor.patch)
     if (compareVersions(latestVersion, currentVersion) > 0) {
       // New version available
-      const downloadUrl = release.assets.find(asset => 
-        asset.name.includes('.zip') && !asset.name.includes('Source')
-      )?.browser_download_url || release.html_url;
+      const downloadAsset = release.assets?.find(asset => 
+        asset.name && 
+        asset.name.match(/^chrome-issue-reporter-v[\d.]+\.zip$/)
+      );
+      
+      const downloadUrl = downloadAsset?.browser_download_url || release.html_url;
       
       // Show notification
       chrome.notifications.create({
@@ -612,10 +621,22 @@ async function checkForUpdates() {
 /**
  * Compares two version strings (e.g., "21.0.0" vs "20.0.0")
  * Returns: 1 if v1 > v2, -1 if v1 < v2, 0 if equal
+ * Handles semantic versioning with major.minor.patch format
  */
 function compareVersions(v1, v2) {
-  const parts1 = v1.split('.').map(Number);
-  const parts2 = v2.split('.').map(Number);
+  // Remove any pre-release identifiers (e.g., "-beta.1")
+  const cleanV1 = v1.split('-')[0];
+  const cleanV2 = v2.split('-')[0];
+  
+  const parts1 = cleanV1.split('.').map(p => {
+    const num = parseInt(p, 10);
+    return isNaN(num) ? 0 : num;
+  });
+  
+  const parts2 = cleanV2.split('.').map(p => {
+    const num = parseInt(p, 10);
+    return isNaN(num) ? 0 : num;
+  });
   
   for (let i = 0; i < Math.max(parts1.length, parts2.length); i++) {
     const p1 = parts1[i] || 0;

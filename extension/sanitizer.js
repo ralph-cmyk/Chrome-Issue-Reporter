@@ -157,57 +157,6 @@ function buildDescription(description) {
 }
 
 /**
- * Builds reproduction steps section
- */
-function buildReproSteps(steps) {
-  if (!steps || !steps.trim()) return '';
-  
-  let content = redactText(steps);
-  content = collapseWhitespace(content);
-  
-  if (new Blob([content]).size > LIMITS.REPRO_STEPS) {
-    content = truncateToBytes(content, LIMITS.REPRO_STEPS);
-    return wrapInDetails('Reproduction Steps (truncated)', content);
-  }
-  
-  return `## Reproduction Steps\n\n${content}`;
-}
-
-/**
- * Builds expected behavior section
- */
-function buildExpected(expected) {
-  if (!expected || !expected.trim()) return '';
-  
-  let content = redactText(expected);
-  content = collapseWhitespace(content);
-  
-  if (new Blob([content]).size > LIMITS.EXPECTED) {
-    content = truncateToBytes(content, LIMITS.EXPECTED);
-    return wrapInDetails('Expected Behavior (truncated)', content);
-  }
-  
-  return `## Expected Behavior\n\n${content}`;
-}
-
-/**
- * Builds actual behavior section
- */
-function buildActual(actual) {
-  if (!actual || !actual.trim()) return '';
-  
-  let content = redactText(actual);
-  content = collapseWhitespace(content);
-  
-  if (new Blob([content]).size > LIMITS.ACTUAL) {
-    content = truncateToBytes(content, LIMITS.ACTUAL);
-    return wrapInDetails('Actual Behavior (truncated)', content);
-  }
-  
-  return `## Actual Behavior\n\n${content}`;
-}
-
-/**
  * Builds JS error section (most recent error only)
  */
 function buildJsError(jsError) {
