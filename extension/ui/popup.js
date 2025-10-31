@@ -4,6 +4,7 @@ let defaultLabels = [];
 // Constants
 const SCRIPT_INITIALIZATION_DELAY = 100; // ms to wait for content script to initialize
 const UNSUPPORTED_URL_PREFIXES = ['chrome://', 'chrome-extension://', 'edge://', 'about:'];
+const MAX_TITLE_LENGTH = 100; // Maximum length for auto-generated titles
 
 const statusEl = document.getElementById('status');
 const titleInput = document.getElementById('title');
@@ -313,12 +314,19 @@ function sanitizeForTitle(value) {
   } while (sanitized.length !== prevLength);
   
   // Remove any potential URI schemes (iterate to handle multiple occurrences)
-  const dangerousSchemes = ['javascript:', 'data:', 'vbscript:', 'file:', 'about:'];
-  dangerousSchemes.forEach(scheme => {
-    let prevLength;
+  // Pre-compile regex for performance
+  const dangerousSchemes = [
+    /javascript:/gi,
+    /data:/gi,
+    /vbscript:/gi,
+    /file:/gi,
+    /about:/gi
+  ];
+  
+  dangerousSchemes.forEach(schemeRegex => {
     do {
       prevLength = sanitized.length;
-      sanitized = sanitized.replace(new RegExp(scheme, 'gi'), '');
+      sanitized = sanitized.replace(schemeRegex, '');
     } while (sanitized.length !== prevLength);
   });
   
@@ -329,8 +337,8 @@ function sanitizeForTitle(value) {
   } while (sanitized.length !== prevLength);
   
   // Limit length to prevent overly long titles
-  if (sanitized.length > 100) {
-    sanitized = sanitized.substring(0, 100);
+  if (sanitized.length > MAX_TITLE_LENGTH) {
+    sanitized = sanitized.substring(0, MAX_TITLE_LENGTH);
   }
   
   return sanitized.trim();
