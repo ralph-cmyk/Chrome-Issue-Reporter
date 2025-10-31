@@ -433,12 +433,12 @@
       <form id="issue-form">
         <button id="live-select" type="button" aria-label="Live Select Element - Authentication required">🎯 Live Select Element</button>
         
-        <label for="title">📝 Issue Title</label>
-        <input id="title" type="text" required placeholder="Describe the issue briefly..." />
-
-        <label for="description">💭 What's wrong?</label>
+        <label for="description">💭 What's the problem?</label>
         <textarea id="description" required placeholder="Describe what's wrong with this element or page..." style="min-height: 120px;"></textarea>
         <div class="hint">💡 Press Shift+Enter to save and create the issue</div>
+
+        <label for="title">📝 Issue Title</label>
+        <input id="title" type="text" required placeholder="Auto-filled based on selected element..." />
         
         <input type="hidden" id="technical-context" />
 

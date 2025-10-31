@@ -215,13 +215,86 @@ function buildDefaultTitle(context) {
   if (!context) {
     return '';
   }
+  
+  // Generate AI-suggested title based on element selection
   if (context.elementDescription) {
-    return `Issue with ${context.elementDescription}`;
+    const desc = context.elementDescription;
+    
+    // Parse element description to create intelligent title
+    // Format: <tag#id.class> - "text content"
+    const tagMatch = desc.match(/<(\w+)/);
+    const textMatch = desc.match(/"([^"]+)"/);
+    const idMatch = desc.match(/#([\w-]+)/);
+    const classMatch = desc.match(/\.([\w-]+)/);
+    
+    const tag = tagMatch ? tagMatch[1] : '';
+    const text = textMatch ? textMatch[1] : '';
+    const id = idMatch ? idMatch[1] : '';
+    const className = classMatch ? classMatch[1] : '';
+    
+    // Build context-aware title
+    let titleParts = [];
+    
+    // Determine the element type for natural language
+    if (tag === 'button') {
+      titleParts.push('Change requested in button');
+    } else if (tag === 'a') {
+      titleParts.push('Change requested in link');
+    } else if (tag === 'img') {
+      titleParts.push('Change requested in image');
+    } else if (tag === 'input' || tag === 'textarea' || tag === 'select') {
+      titleParts.push('Change requested in form field');
+    } else if (tag === 'h1' || tag === 'h2' || tag === 'h3' || tag === 'h4' || tag === 'h5' || tag === 'h6') {
+      titleParts.push('Change requested in heading');
+    } else if (tag === 'nav') {
+      titleParts.push('Change requested in navigation');
+    } else if (tag === 'header') {
+      titleParts.push('Change requested in header');
+    } else if (tag === 'footer') {
+      titleParts.push('Change requested in footer');
+    } else if (tag === 'section' || tag === 'div') {
+      // Try to infer from class names
+      if (className) {
+        if (className.includes('hero') || className.includes('banner') || className.includes('jumbotron')) {
+          titleParts.push('Change requested in the hero of the page');
+        } else if (className.includes('nav') || className.includes('menu')) {
+          titleParts.push('Change requested in navigation');
+        } else if (className.includes('card')) {
+          titleParts.push('Change requested in card');
+        } else if (className.includes('modal') || className.includes('dialog')) {
+          titleParts.push('Change requested in modal');
+        } else if (className.includes('sidebar')) {
+          titleParts.push('Change requested in sidebar');
+        } else {
+          titleParts.push(`Change requested in ${className} section`);
+        }
+      } else if (id) {
+        if (id.includes('hero') || id.includes('banner')) {
+          titleParts.push('Change requested in the hero of the page');
+        } else {
+          titleParts.push(`Change requested in ${id}`);
+        }
+      } else {
+        titleParts.push('Change requested in section');
+      }
+    } else {
+      // Generic fallback
+      titleParts.push(`Change requested in ${tag || 'element'}`);
+    }
+    
+    // Add text context if available and short enough
+    if (text && text.length < 30) {
+      titleParts.push(`(${text})`);
+    }
+    
+    return titleParts.join(' ');
   }
+  
   if (context.title) {
-    return `Issue: ${context.title}`;
+    return `Change requested: ${context.title}`;
   }
-  return `Issue for ${context.url}`;
+  
+  return 'Change requested on page';
 }
 
 function formatContextPreview(context) {
