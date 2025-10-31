@@ -303,15 +303,36 @@ function sanitizeForTitle(value) {
   if (!value) {
     return '';
   }
-  // Remove any HTML tags and script-like content
-  let sanitized = String(value).replace(/<[^>]*>/g, '');
-  // Remove any potential script patterns
-  sanitized = sanitized.replace(/javascript:/gi, '');
-  sanitized = sanitized.replace(/on\w+=/gi, '');
+  let sanitized = String(value);
+  
+  // Remove any HTML tags and script-like content (iterate to handle nested tags)
+  let prevLength;
+  do {
+    prevLength = sanitized.length;
+    sanitized = sanitized.replace(/<[^>]*>/g, '');
+  } while (sanitized.length !== prevLength);
+  
+  // Remove any potential URI schemes (iterate to handle multiple occurrences)
+  const dangerousSchemes = ['javascript:', 'data:', 'vbscript:', 'file:', 'about:'];
+  dangerousSchemes.forEach(scheme => {
+    let prevLength;
+    do {
+      prevLength = sanitized.length;
+      sanitized = sanitized.replace(new RegExp(scheme, 'gi'), '');
+    } while (sanitized.length !== prevLength);
+  });
+  
+  // Remove event handler patterns (iterate to handle multiple occurrences)
+  do {
+    prevLength = sanitized.length;
+    sanitized = sanitized.replace(/on\w+=/gi, '');
+  } while (sanitized.length !== prevLength);
+  
   // Limit length to prevent overly long titles
   if (sanitized.length > 100) {
     sanitized = sanitized.substring(0, 100);
   }
+  
   return sanitized.trim();
 }
 
