@@ -227,10 +227,11 @@ function buildDefaultTitle(context) {
     const idMatch = desc.match(/#([\w-]+)/);
     const classMatch = desc.match(/\.([\w-]+)/);
     
-    const tag = tagMatch ? tagMatch[1] : '';
-    const text = textMatch ? textMatch[1] : '';
-    const id = idMatch ? idMatch[1] : '';
-    const className = classMatch ? classMatch[1] : '';
+    // Sanitize extracted values to prevent XSS
+    const tag = tagMatch ? sanitizeForTitle(tagMatch[1]) : '';
+    const text = textMatch ? sanitizeForTitle(textMatch[1]) : '';
+    const id = idMatch ? sanitizeForTitle(idMatch[1]) : '';
+    const className = classMatch ? sanitizeForTitle(classMatch[1]) : '';
     
     // Build context-aware title
     let titleParts = [];
@@ -291,10 +292,27 @@ function buildDefaultTitle(context) {
   }
   
   if (context.title) {
-    return `Change requested: ${context.title}`;
+    return `Change requested: ${sanitizeForTitle(context.title)}`;
   }
   
   return 'Change requested on page';
+}
+
+// Sanitize values for use in title to prevent XSS
+function sanitizeForTitle(value) {
+  if (!value) {
+    return '';
+  }
+  // Remove any HTML tags and script-like content
+  let sanitized = String(value).replace(/<[^>]*>/g, '');
+  // Remove any potential script patterns
+  sanitized = sanitized.replace(/javascript:/gi, '');
+  sanitized = sanitized.replace(/on\w+=/gi, '');
+  // Limit length to prevent overly long titles
+  if (sanitized.length > 100) {
+    sanitized = sanitized.substring(0, 100);
+  }
+  return sanitized.trim();
 }
 
 function formatContextPreview(context) {
