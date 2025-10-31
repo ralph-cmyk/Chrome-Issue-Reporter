@@ -187,14 +187,14 @@ function buildJsError(jsError) {
 }
 
 /**
- * Builds console logs section (WARN/ERROR only, last 30 entries or 8 KB)
+ * Builds console logs section (log, warn, error - last 30 entries or 8 KB)
  */
 function buildConsoleLogs(logs) {
   if (!logs || !Array.isArray(logs)) return '';
   
-  // Filter to WARN and ERROR only
+  // Include log, warn, and error (all console messages for context)
   const filtered = logs.filter(log => 
-    log.type === 'warn' || log.type === 'error'
+    log.type === 'log' || log.type === 'warn' || log.type === 'error'
   );
   
   if (filtered.length === 0) return '';
