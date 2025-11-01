@@ -157,8 +157,8 @@ async function handleSubmit(event) {
       const issue = response.issue;
       setStatus(`✅ Issue #${issue.number} created successfully!`, 'success');
       lastIssueEl.innerHTML = `<a href="${issue.html_url}" target="_blank" rel="noreferrer">🔗 View Issue #${issue.number}</a>`;
-      // Close the popup after successful issue creation
-      window.close();
+      // Close the popup after a brief delay to let users see the success message
+      setTimeout(() => window.close(), 500);
     } else {
       setStatus('❌ ' + (response?.error || 'Failed to create issue.'), 'error');
     }
