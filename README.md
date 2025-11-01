@@ -50,8 +50,8 @@ The extension automatically captures:
 - **Current URL**: The page where the issue was found
 - **Selected Text**: Any text you had highlighted
 - **HTML Context**: The surrounding HTML structure
-- **Console Logs**: Recent console messages (log, error, warn) - last 20 entries
-- **JavaScript Errors**: Any errors that occurred on the page
+- **Console Logs**: Recent console messages (log, info, debug, warn, error) - captures up to 100 entries, includes last 50 in issue
+- **JavaScript Errors**: Any errors that occurred on the page with full stack traces
 - **Script Content**: Nearby JavaScript code
 - **User Agent**: Browser and OS information
 

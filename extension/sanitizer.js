@@ -11,7 +11,7 @@ const LIMITS = {
   ACTUAL: 2 * 1024,             // 2 KB
   JS_ERROR: 2 * 1024,           // 2 KB
   CONSOLE_LOGS: 8 * 1024,       // 8 KB
-  CONSOLE_ENTRIES: 30,          // max 30 entries
+  CONSOLE_ENTRIES: 50,          // max 50 entries (increased for better debugging context)
   NETWORK_SAMPLE: 512,          // 512 bytes
   DOM_SNIPPET: 3 * 1024         // 3 KB
 };
@@ -187,25 +187,26 @@ function buildJsError(jsError) {
 }
 
 /**
- * Builds console logs section (log, warn, error - last 30 entries or 8 KB)
+ * Builds console logs section (log, info, debug, warn, error - last 50 entries or 8 KB)
  */
 function buildConsoleLogs(logs) {
   if (!logs || !Array.isArray(logs)) return '';
   
-  // Include log, warn, and error (all console messages for context)
+  // Include all console message types for comprehensive debugging context
   const filtered = logs.filter(log => 
-    log.type === 'log' || log.type === 'warn' || log.type === 'error'
+    log.type === 'log' || log.type === 'info' || log.type === 'debug' || 
+    log.type === 'warn' || log.type === 'error'
   );
   
   if (filtered.length === 0) return '';
   
-  // Take last 30 entries
+  // Take last N entries (based on LIMITS.CONSOLE_ENTRIES)
   const recent = filtered.slice(-LIMITS.CONSOLE_ENTRIES);
   
   // Deduplicate consecutive identical lines
   const deduped = deduplicateConsecutive(recent);
   
-  // Format logs
+  // Format logs with color-coded type indicators
   const formatted = deduped.map(log => {
     const time = log.timestamp ? new Date(log.timestamp).toISOString() : '';
     const message = redactText(log.message || '');
