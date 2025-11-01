@@ -101,14 +101,18 @@ window.addEventListener(
   (event) => {
     if (event?.reason) {
       const reason = event.reason;
-      lastJsError = {
-        message: reason?.message || String(reason),
-        source: 'Unhandled Promise Rejection',
-        line: 0,
-        column: 0,
-        stack: reason?.stack || '',
-        timestamp: Date.now()
-      };
+      const now = Date.now();
+      // Only overwrite if no recent error (within 5 seconds) to avoid masking synchronous errors
+      if (!lastJsError || (now - lastJsError.timestamp) > 5000) {
+        lastJsError = {
+          message: reason?.message || String(reason),
+          source: 'Unhandled Promise Rejection',
+          line: 0,
+          column: 0,
+          stack: reason?.stack || '',
+          timestamp: now
+        };
+      }
     }
   },
   { capture: true }
