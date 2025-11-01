@@ -1,5 +1,5 @@
 const MAX_SNIPPET_LENGTH = 5 * 1024; // 5 KB per block
-const MAX_CONSOLE_LOGS = 50; // Maximum number of console logs to capture
+const MAX_CONSOLE_LOGS = 100; // Maximum number of console logs to capture (increased for better debugging)
 let lastJsError = null;
 let consoleLogs = [];
 let liveSelectMode = false;
@@ -8,6 +8,8 @@ let overlayDiv = null;
 let originalConsoleLog = null;
 let originalConsoleError = null;
 let originalConsoleWarn = null;
+let originalConsoleInfo = null;
+let originalConsoleDebug = null;
 
 // Capture console logs
 function initConsoleCapture() {
@@ -15,6 +17,8 @@ function initConsoleCapture() {
     originalConsoleLog = console.log;
     originalConsoleError = console.error;
     originalConsoleWarn = console.warn;
+    originalConsoleInfo = console.info;
+    originalConsoleDebug = console.debug;
     
     console.log = function(...args) {
       captureConsoleLog('log', args);
@@ -29,6 +33,16 @@ function initConsoleCapture() {
     console.warn = function(...args) {
       captureConsoleLog('warn', args);
       originalConsoleWarn.apply(console, args);
+    };
+    
+    console.info = function(...args) {
+      captureConsoleLog('info', args);
+      originalConsoleInfo.apply(console, args);
+    };
+    
+    console.debug = function(...args) {
+      captureConsoleLog('debug', args);
+      originalConsoleDebug.apply(console, args);
     };
   }
 }
@@ -81,6 +95,25 @@ window.addEventListener(
   { capture: true }
 );
 
+// Also capture unhandled promise rejections
+window.addEventListener(
+  'unhandledrejection',
+  (event) => {
+    if (event?.reason) {
+      const reason = event.reason;
+      lastJsError = {
+        message: reason?.message || String(reason),
+        source: 'Unhandled Promise Rejection',
+        line: 0,
+        column: 0,
+        stack: reason?.stack || '',
+        timestamp: Date.now()
+      };
+    }
+  },
+  { capture: true }
+);
+
 chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
   if (message?.type === 'captureContext') {
     try {
@@ -120,7 +153,7 @@ function collectContext(selectedElement = null) {
     cssSelector,
     elementDescription,
     jsError: lastJsError,
-    consoleLogs: consoleLogs.slice(-50), // Return as array, not formatted string
+    consoleLogs: consoleLogs.slice(-100), // Return last 100 console logs for better debugging context
     timestamp: Date.now()
   };
 }
