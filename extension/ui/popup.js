@@ -35,6 +35,9 @@ function init() {
     }
   });
   
+  // Auto-focus the description textarea when popup opens
+  descriptionInput.focus();
+  
   refresh();
 }
 
