@@ -243,6 +243,8 @@ async function handleSaveOAuthConfig() {
     setStatus('✅ OAuth Configuration saved successfully!\n\n' +
       `🔑 Client ID: ${clientId.substring(0, 10)}...\n\n` +
       '💡 You can now sign in with GitHub using the button below.', 'success');
+    // Close the options page after a brief delay to let users see the success message
+    setTimeout(() => window.close(), 1500);
   } else {
     setStatus('❌ Unable to save OAuth configuration\n\n' + 
       (response?.error || 'Unknown error occurred'), 'error');
@@ -281,6 +283,8 @@ async function handleSave() {
 
   if (response?.success) {
     setStatus(`✅ Settings saved successfully!\n\n📂 Repository: ${owner}/${repo}\n🏷️ Labels: ${labels.length > 0 ? labels.join(', ') : 'None'}`, 'success');
+    // Close the options page after a brief delay to let users see the success message
+    setTimeout(() => window.close(), 1500);
   } else {
     setStatus('❌ Unable to save settings\n\n' + (response?.error || 'Unknown error occurred'), 'error');
   }
