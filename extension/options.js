@@ -53,13 +53,13 @@ async function handleOAuthSignIn() {
     const { user_code, verification_uri, device_code, interval } = response;
     
     // Step 2: Show the code to the user and open GitHub
-    const message = `✅ Device flow started successfully!
+    const message = `🔑 YOUR VERIFICATION CODE: ${user_code}
 
-🔑 Your verification code: ${user_code}
+✅ Device flow started successfully!
 
 📋 Instructions:
 1. A new tab will open to GitHub
-2. Enter the code: ${user_code}
+2. Enter the code above: ${user_code}
 3. Authorize the extension
 4. Return to this page
 
