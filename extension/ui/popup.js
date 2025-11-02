@@ -16,6 +16,7 @@ const createButton = document.getElementById('create');
 const liveSelectButton = document.getElementById('live-select');
 const openOptionsLink = document.getElementById('open-options');
 const repoInfoEl = document.getElementById('repo-info');
+const assignCopilotCheckbox = document.getElementById('assign-copilot');
 
 init();
 
@@ -149,7 +150,8 @@ async function handleSubmit(event) {
         title,
         description,
         context,
-        labels: defaultLabels
+        labels: defaultLabels,
+        assignToCopilot: assignCopilotCheckbox.checked
       }
     });
 

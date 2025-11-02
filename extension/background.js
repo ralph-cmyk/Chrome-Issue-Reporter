@@ -448,6 +448,41 @@ async function fetchUserRepos() {
   }
 }
 
+async function fetchAuthenticatedUser() {
+  const token = await getStoredToken();
+  if (!token) {
+    throw new Error('Authentication required.');
+  }
+  
+  try {
+    const response = await fetch('https://api.github.com/user', {
+      headers: {
+        Authorization: `token ${token}`,
+        Accept: 'application/vnd.github+json',
+        'X-GitHub-Api-Version': '2022-11-28'
+      }
+    });
+    
+    if (!response.ok) {
+      if (response.status === 401) {
+        await clearStoredToken();
+        throw new Error('Authentication expired. Please sign in again.');
+      }
+      throw new Error(`Failed to fetch user: ${response.status}`);
+    }
+    
+    const user = await response.json();
+    return {
+      login: user.login,
+      id: user.id,
+      name: user.name
+    };
+  } catch (error) {
+    console.error('Error fetching user:', error);
+    throw error;
+  }
+}
+
 async function createIssue(payload = {}) {
   const token = await getStoredToken();
   if (!token) {
@@ -476,6 +511,31 @@ async function createIssue(payload = {}) {
     throw new Error('Issue title is required.');
   }
 
+  // Check if user wants to assign to copilot
+  const assignToCopilot = payload.assignToCopilot === true;
+  let assignees = [];
+  let issueBody = sanitized.body;
+  
+  if (assignToCopilot) {
+    try {
+      // Get the authenticated user
+      const currentUser = await fetchAuthenticatedUser();
+      
+      // Check if the user is ralph-cmyk
+      if (currentUser.login === 'ralph-cmyk') {
+        // Auto-assign to copilot
+        assignees = ['copilot'];
+      } else {
+        // Add a notice to the issue body for pending approval
+        const approvalNotice = '\n\n---\n\n⏳ **Assignment Pending Approval**\n\nThis issue is requesting assignment to @copilot. Assignment is pending approval from the repository owner.\n';
+        issueBody = issueBody + approvalNotice;
+      }
+    } catch (error) {
+      console.error('Failed to fetch user for assignment check:', error);
+      // Continue without assignment if user fetch fails
+    }
+  }
+
   const response = await fetch(`https://api.github.com/repos/${owner}/${repo}/issues`, {
     method: 'POST',
     headers: {
@@ -486,8 +546,9 @@ async function createIssue(payload = {}) {
     },
     body: JSON.stringify({
       title: sanitized.title,
-      body: sanitized.body,
-      labels: requestLabels
+      body: issueBody,
+      labels: requestLabels,
+      assignees: assignees
     })
   });
 
