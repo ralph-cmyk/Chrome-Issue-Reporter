@@ -159,8 +159,17 @@ async function handleSubmit(event) {
       const issue = response.issue;
       setStatus(`✅ Issue #${issue.number} created successfully!`, 'success');
       lastIssueEl.innerHTML = `<a href="${issue.html_url}" target="_blank" rel="noreferrer">🔗 View Issue #${issue.number}</a>`;
-      // Close the popup after a brief delay to let users see the success message
-      setTimeout(() => window.close(), 500);
+      
+      // Clear the form
+      titleInput.value = '';
+      descriptionInput.value = '';
+      assignCopilotCheckbox.checked = false;
+      technicalContextInput.value = '';
+      
+      // Clear cached context
+      cachedContext = null;
+      contextPreviewEl.textContent = 'No captured context yet. Use "Live Select" to collect details from a page element.';
+      await chrome.runtime.sendMessage({ type: 'clearLastContext' });
     } else {
       setStatus('❌ ' + (response?.error || 'Failed to create issue.'), 'error');
     }
