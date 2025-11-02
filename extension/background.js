@@ -482,7 +482,9 @@ async function createIssue(payload = {}) {
   
   if (assignToCopilot) {
     // GitHub Copilot cannot be assigned via the REST API like a regular user.
-    // Instead, we mention @copilot in the issue body to trigger Copilot.
+    // Instead, we mention @copilot in the issue body. When @copilot is mentioned,
+    // GitHub's Copilot integration allows users to interact with Copilot in the issue
+    // comments to get AI-assisted help with the problem.
     issueBody = `@copilot\n\n` + issueBody;
   }
 
