@@ -10,6 +10,11 @@ const CONTEXT_MENU_ID = 'create-github-issue';
 const MAX_SNIPPET_LENGTH = 5 * 1024; // 5 KB
 const SCRIPT_INITIALIZATION_DELAY = 100; // ms to wait for content script to initialize
 
+// Copilot assignment configuration
+const COPILOT_ASSIGNEE = 'copilot';
+const PRIVILEGED_USER = 'ralph-cmyk'; // User who can auto-assign to copilot
+const COPILOT_APPROVAL_NOTICE = '\n\n---\n\n⏳ **Assignment Pending Approval**\n\nThis issue is requesting assignment to @copilot. Assignment is pending approval from the repository owner.\n';
+
 // GitHub OAuth Configuration
 const GITHUB_DEVICE_CODE_URL = 'https://github.com/login/device/code';
 const GITHUB_ACCESS_TOKEN_URL = 'https://github.com/login/oauth/access_token';
@@ -521,14 +526,13 @@ async function createIssue(payload = {}) {
       // Get the authenticated user
       const currentUser = await fetchAuthenticatedUser();
       
-      // Check if the user is ralph-cmyk
-      if (currentUser.login === 'ralph-cmyk') {
+      // Check if the user is the privileged user
+      if (currentUser.login === PRIVILEGED_USER) {
         // Auto-assign to copilot
-        assignees = ['copilot'];
+        assignees = [COPILOT_ASSIGNEE];
       } else {
         // Add a notice to the issue body for pending approval
-        const approvalNotice = '\n\n---\n\n⏳ **Assignment Pending Approval**\n\nThis issue is requesting assignment to @copilot. Assignment is pending approval from the repository owner.\n';
-        issueBody = issueBody + approvalNotice;
+        issueBody = issueBody + COPILOT_APPROVAL_NOTICE;
       }
     } catch (error) {
       console.error('Failed to fetch user for assignment check:', error);
