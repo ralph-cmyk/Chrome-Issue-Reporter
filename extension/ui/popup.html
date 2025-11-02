@@ -342,6 +342,38 @@
         border: 1px solid #e1e4e8;
       }
       
+      .checkbox-container {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        margin-top: 16px;
+        padding: 12px;
+        background: #f6f8fa;
+        border-radius: 8px;
+        border: 1px solid #e1e4e8;
+        cursor: pointer;
+        transition: all 0.2s ease;
+      }
+      
+      .checkbox-container:hover {
+        background: #e9ecef;
+      }
+      
+      .checkbox-container input[type="checkbox"] {
+        width: auto;
+        margin: 0;
+        cursor: pointer;
+      }
+      
+      .checkbox-container label {
+        margin: 0;
+        cursor: pointer;
+        font-weight: 500;
+        color: #333;
+        font-size: 0.9rem;
+        flex: 1;
+      }
+      
       .info-item {
         display: flex;
         flex-direction: column;
@@ -439,6 +471,11 @@
 
         <label for="title">📝 Issue Title</label>
         <input id="title" type="text" required placeholder="Auto-filled based on selected element..." />
+        
+        <div class="checkbox-container">
+          <input type="checkbox" id="assign-copilot" />
+          <label for="assign-copilot">🤖 Assign to Copilot</label>
+        </div>
         
         <input type="hidden" id="technical-context" />
 
