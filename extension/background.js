@@ -550,6 +550,13 @@ async function createIssue(payload = {}) {
 
   const sanitized = buildSanitizedIssue(context, userInput);
   let issueBody = sanitized.body;
+  const bodySize = sanitized.size;
+
+  if (bodySize >= 64 * 1024) {
+    throw new Error(`Issue body is ${Math.round(bodySize / 1024)}KB, which exceeds GitHub's 65KB limit. Please shorten the description or recapture a smaller element.`);
+  } else if (bodySize >= 55 * 1024) {
+    console.warn('Issue body approaching GitHub size limit:', bodySize);
+  }
 
   const requestLabels = Array.isArray(payload.labels) ? payload.labels : labels || [];
 

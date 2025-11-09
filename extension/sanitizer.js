@@ -3,17 +3,17 @@
 
 // Size limits (in bytes)
 const LIMITS = {
-  OVERALL: 15 * 1024,           // 15 KB total
+  OVERALL: 40 * 1024,           // 40 KB context budget (well below GitHub's 65 KB hard cap)
   TITLE: 80,                    // 80 characters
   HEADER: 300,                  // 300 characters
   REPRO_STEPS: 2 * 1024,        // 2 KB
   EXPECTED: 2 * 1024,           // 2 KB
   ACTUAL: 2 * 1024,             // 2 KB
   JS_ERROR: 2 * 1024,           // 2 KB
-  CONSOLE_LOGS: 8 * 1024,       // 8 KB
-  CONSOLE_ENTRIES: 50,          // max 50 entries (increased for better debugging context)
+  CONSOLE_LOGS: 3 * 1024,       // tighter console log cap
+  CONSOLE_ENTRIES: 20,          // fewer console entries to reduce noise
   NETWORK_SAMPLE: 512,          // 512 bytes
-  DOM_SNIPPET: 3 * 1024         // 3 KB
+  DOM_SNIPPET: 1 * 1024         // 1 KB
 };
 
 // Regular expressions for redaction
@@ -42,48 +42,62 @@ const INLINE_EVENT_PATTERN = /\s+on\w+\s*=\s*["'][^"']*["']/gi;
  * @returns {Object} - { title, body } formatted for GitHub
  */
 function buildSanitizedIssue(context = {}, userInput = {}) {
-  const sections = [];
-  
-  // Build each section
+  const mandatorySections = [];
+  const optionalSections = [];
+
   const header = buildHeader(context);
+  if (header) mandatorySections.push(header);
+
   const elementContext = buildElementContext(context);
+  if (elementContext) mandatorySections.push(elementContext);
+
   const description = buildDescription(userInput.description || '');
+  if (description) mandatorySections.push(description);
+
   const consoleSummary = buildConsoleSummary(context.consoleLogs);
+  if (consoleSummary) optionalSections.push(consoleSummary);
+
   const jsError = buildJsError(context.jsError);
-  const consoleLogs = buildConsoleLogs(context.consoleLogs);
+  if (jsError) optionalSections.push(jsError);
+
   const networkSample = buildNetworkSample(context.networkRequests);
+  if (networkSample) optionalSections.push(networkSample);
+
+  const consoleLogs = buildConsoleLogs(context.consoleLogs);
+  if (consoleLogs) optionalSections.push(consoleLogs);
+
   const domSnippet = buildDomSnippet(context.htmlSnippet);
-  
-  // Add sections in order (omit empty ones)
-  if (header) sections.push(header);
-  if (elementContext) sections.push(elementContext);
-  if (description) sections.push(description);
-  if (consoleSummary) sections.push(consoleSummary);
-  if (jsError) sections.push(jsError);
-  if (consoleLogs) sections.push(consoleLogs);
-  if (networkSample) sections.push(networkSample);
-  if (domSnippet) sections.push(domSnippet);
-  let body = sections.join('\n\n');
-  
-  // Apply overall size limit
-  const bodySizeBytes = new Blob([body]).size;
-  if (bodySizeBytes > LIMITS.OVERALL) {
+  if (domSnippet) optionalSections.push(domSnippet);
+
+  let body = '';
+  const appendSection = (section) => {
+    if (!section) return;
+    body = body ? `${body}\n\n${section}` : section;
+  };
+
+  mandatorySections.forEach(appendSection);
+
+  optionalSections.forEach((section) => {
+    if (!section) return;
+    const candidate = body ? `${body}\n\n${section}` : section;
+    if (getByteLength(candidate) <= LIMITS.OVERALL) {
+      body = candidate;
+    }
+  });
+
+  if (getByteLength(body) > LIMITS.OVERALL) {
     body = truncateToBytes(body, LIMITS.OVERALL);
     body += '\n\n[…] truncated';
   }
-  
-  if (attachments.length > 0) {
-    body += '\n\n' + attachments.join('\n\n');
-  }
 
-  // Add context hash for determinism
   const contextHash = generateContextHash(context);
   body += `\n\nContext-Hash: ${contextHash}`;
-  
-  // Sanitize and format title
+
   const title = sanitizeTitle(userInput.title || context.title || 'Issue Report');
-  
-  return { title, body };
+
+  const size = getByteLength(body);
+
+  return { title, body, size };
 }
 
 /**
@@ -240,7 +254,7 @@ function buildConsoleLogs(logs) {
   // Format logs with color-coded type indicators
   const formatted = deduped.map(log => {
     const time = log.timestamp ? new Date(log.timestamp).toISOString() : '';
-    const message = redactText(log.message || '');
+    const message = truncateAndRedact(log.message || '', 240);
     return `[${time}] [${log.type.toUpperCase()}] ${message}`;
   }).join('\n');
   
@@ -538,6 +552,11 @@ function truncateAndRedact(text, limit) {
     content = content.slice(0, limit - 1) + '…';
   }
   return content;
+}
+
+function getByteLength(text) {
+  if (!text) return 0;
+  return new TextEncoder().encode(text).length;
 }
 
 // Export for use in background.js (ES module)
