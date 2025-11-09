@@ -20,11 +20,12 @@ const modalState = {
   context: null,
   screenshotDataUrl: null,
   repo: null,
-  preferences: { milestoneNumber: null, projectId: null, columnId: null },
+  preferences: { milestoneNumber: null, projectId: null, statusFieldId: null, statusOptionId: null },
   generatedTitle: '',
   titleDirty: false,
   submitting: false,
-  lastIssue: null
+  lastIssue: null,
+  projectFieldId: null
 };
 let modalStylesInjected = false;
 
@@ -541,11 +542,11 @@ function ensureModalStyles() {
       display: flex !important;
     }
     #${MODAL_OVERLAY_ID} .cir-modal {
-      width: min(380px, calc(100vw - 32px)) !important;
+      width: min(520px, calc(100vw - 48px)) !important;
       background: #ffffff !important;
       border-radius: 18px !important;
-      box-shadow: 0 20px 50px rgba(15, 23, 42, 0.25) !important;
-      padding: 20px !important;
+      box-shadow: 0 24px 60px rgba(15, 23, 42, 0.26) !important;
+      padding: 24px !important;
       display: flex !important;
       flex-direction: column !important;
       gap: 14px !important;
@@ -817,7 +818,7 @@ function ensureIssueModalElements() {
         <select id="cir-project" class="cir-select"></select>
         <label class="cir-label" for="cir-milestone">Milestone</label>
         <select id="cir-milestone" class="cir-select"></select>
-        <label class="cir-label" for="cir-column">Column</label>
+        <label class="cir-label" for="cir-column">Status</label>
         <select id="cir-column" class="cir-select"></select>
         <button type="submit" class="cir-submit">Create issue</button>
       </form>
@@ -910,11 +911,12 @@ async function openIssueModal(payload = {}, fromLiveSelect = false) {
   modalState.context = payload.context || null;
   modalState.screenshotDataUrl = payload.screenshotDataUrl || null;
   modalState.repo = payload.repo || null;
-  modalState.preferences = payload.preferences || { milestoneNumber: null, projectId: null, columnId: null };
+  modalState.preferences = payload.preferences || { milestoneNumber: null, projectId: null, statusFieldId: null, statusOptionId: null };
   modalState.generatedTitle = buildDefaultTitle(modalState.context);
   modalState.titleDirty = false;
   modalState.submitting = false;
   modalState.lastIssue = payload.lastIssue || null;
+  modalState.projectFieldId = modalState.preferences.statusFieldId || null;
 
   setModalStatus('');
   setSubmittingState(false);
@@ -1039,7 +1041,7 @@ async function populateDropdowns() {
   modalElements.projectSelect.appendChild(projectDefaultOption);
   projects.forEach(project => {
     const option = document.createElement('option');
-    option.value = String(project.id);
+    option.value = project.id;
     option.textContent = project.name;
     modalElements.projectSelect.appendChild(option);
   });
@@ -1047,55 +1049,68 @@ async function populateDropdowns() {
 
   const preferredProjectId = modalState.preferences.projectId;
   if (preferredProjectId && projects.some(project => project.id === preferredProjectId)) {
-    modalElements.projectSelect.value = String(preferredProjectId);
-    await loadColumnsForProject(preferredProjectId, modalState.preferences.columnId || null);
+    modalElements.projectSelect.value = preferredProjectId;
+    const columnData = await loadColumnsForProject(preferredProjectId, modalState.preferences.statusOptionId || null);
+    modalState.preferences.statusFieldId = columnData?.fieldId || null;
   } else {
     modalElements.projectSelect.value = '';
+    modalState.projectFieldId = null;
     modalElements.columnSelect.innerHTML = '<option value="">Select a project first</option>';
     modalElements.columnSelect.disabled = true;
   }
 }
 
-async function loadColumnsForProject(projectId, selectColumnId = null) {
+async function loadColumnsForProject(projectId, selectOptionId = null) {
   if (!modalElements) return;
-  if (!Number.isFinite(projectId)) {
+  if (!projectId) {
+    modalState.projectFieldId = null;
     modalElements.columnSelect.innerHTML = '<option value="">Select a project first</option>';
     modalElements.columnSelect.disabled = true;
-    return;
+    return null;
   }
 
-  let columns = columnsCache.get(projectId);
-  if (!columns) {
+  let columnData = columnsCache.get(projectId);
+  if (!columnData) {
     const response = await chrome.runtime.sendMessage({ type: 'getProjectColumns', projectId }).catch(() => null);
     if (!response?.success) {
-      modalElements.columnSelect.innerHTML = '<option value="">Unable to load columns</option>';
+      modalState.projectFieldId = null;
+      modalElements.columnSelect.innerHTML = '<option value="">Unable to load status options</option>';
       modalElements.columnSelect.disabled = true;
-      return;
+      return null;
     }
-    columns = response.columns || [];
-    columnsCache.set(projectId, columns);
+    columnData = response.columns || { fieldId: null, options: [] };
+    columnsCache.set(projectId, columnData);
   }
+
+  modalState.projectFieldId = columnData.fieldId || null;
+  modalState.preferences.statusFieldId = columnData.fieldId || null;
+
+  const options = Array.isArray(columnData.options) ? columnData.options : [];
 
   modalElements.columnSelect.innerHTML = '';
   const defaultOption = document.createElement('option');
   defaultOption.value = '';
-  defaultOption.textContent = columns.length > 0 ? 'Select column' : 'No columns available';
+  defaultOption.textContent = options.length > 0 ? 'Select status' : 'No status options';
   modalElements.columnSelect.appendChild(defaultOption);
 
-  columns.forEach(column => {
-    const option = document.createElement('option');
-    option.value = String(column.id);
-    option.textContent = column.name;
-    modalElements.columnSelect.appendChild(option);
+  options.forEach(option => {
+    const optionEl = document.createElement('option');
+    optionEl.value = option.id;
+    optionEl.textContent = option.name;
+    modalElements.columnSelect.appendChild(optionEl);
   });
 
-  modalElements.columnSelect.disabled = columns.length === 0;
+  modalElements.columnSelect.disabled = options.length === 0;
 
-  if (selectColumnId && columns.some(column => column.id === selectColumnId)) {
-    modalElements.columnSelect.value = String(selectColumnId);
+  if (selectOptionId && options.some(option => option.id === selectOptionId)) {
+    modalElements.columnSelect.value = selectOptionId;
+    modalState.preferences.statusOptionId = selectOptionId;
   } else {
     modalElements.columnSelect.value = '';
+    modalState.preferences.statusOptionId = null;
   }
+
+  return columnData;
 }
 
 async function handleModalSubmit(event) {
@@ -1122,9 +1137,9 @@ async function handleModalSubmit(event) {
   setModalStatus('Creating issue…', 'info');
   setSubmittingState(true);
 
-  const projectId = Number(modalElements.projectSelect.value) || null;
+  const projectId = modalElements.projectSelect.value || null;
   const milestoneNumber = Number(modalElements.milestoneSelect.value) || null;
-  const columnId = Number(modalElements.columnSelect.value) || null;
+  const statusOptionId = modalElements.columnSelect.value || null;
 
   try {
     const response = await chrome.runtime.sendMessage({
@@ -1135,7 +1150,8 @@ async function handleModalSubmit(event) {
         context: modalState.context,
         milestoneNumber: milestoneNumber || undefined,
         projectId: projectId || undefined,
-        projectColumnId: columnId || undefined,
+        projectFieldId: modalState.projectFieldId || undefined,
+        projectOptionId: statusOptionId || undefined,
         screenshotDataUrl: modalState.screenshotDataUrl
       }
     });
@@ -1165,18 +1181,40 @@ function handleDescriptionInput() {
 
 async function handleProjectChange(event) {
   if (!modalElements) return;
-  const value = Number(event.target.value) || null;
+  const value = event.target.value || null;
   modalState.preferences.projectId = value;
-  modalState.preferences.columnId = null;
+  modalState.preferences.statusOptionId = null;
+  modalState.preferences.statusFieldId = null;
+  modalState.projectFieldId = null;
+
   try {
     await chrome.runtime.sendMessage({
       type: 'saveSelectionPreferences',
-      preferences: { projectId: value, columnId: null }
+      preferences: { projectId: value, statusOptionId: null, statusFieldId: null }
     });
   } catch {
     // ignore
   }
-  await loadColumnsForProject(value, null);
+
+  const columnData = await loadColumnsForProject(value, null);
+  if (columnData) {
+    modalState.preferences.statusFieldId = columnData.fieldId || null;
+    modalState.projectFieldId = columnData.fieldId || null;
+    if (value && modalState.projectFieldId) {
+      try {
+        await chrome.runtime.sendMessage({
+          type: 'saveSelectionPreferences',
+          preferences: {
+            projectId: value,
+            statusFieldId: modalState.projectFieldId,
+            statusOptionId: null
+          }
+        });
+      } catch {
+        // ignore
+      }
+    }
+  }
 }
 
 async function handleMilestoneChange(event) {
@@ -1194,17 +1232,24 @@ async function handleMilestoneChange(event) {
 
 async function handleColumnChange(event) {
   if (!modalElements) return;
-  const projectId = Number(modalElements.projectSelect.value) || null;
-  const columnId = Number(event.target.value) || null;
+  const projectId = modalElements.projectSelect.value || null;
+  const statusOptionId = event.target.value || null;
   modalState.preferences.projectId = projectId;
-  modalState.preferences.columnId = columnId;
-  try {
-    await chrome.runtime.sendMessage({
-      type: 'saveSelectionPreferences',
-      preferences: { projectId, columnId }
-    });
-  } catch {
-    // ignore
+  modalState.preferences.statusFieldId = modalState.projectFieldId;
+  modalState.preferences.statusOptionId = statusOptionId || null;
+  if (projectId && modalState.projectFieldId) {
+    try {
+      await chrome.runtime.sendMessage({
+        type: 'saveSelectionPreferences',
+        preferences: {
+          projectId,
+          statusFieldId: modalState.projectFieldId,
+          statusOptionId
+        }
+      });
+    } catch {
+      // ignore
+    }
   }
 }
 
@@ -1297,8 +1342,18 @@ function generateTitleFromDescription(description, fallback = '') {
   if (!firstLine) {
     return fallback || 'Change requested on page';
   }
-  const sanitized = sanitizeForTitle(firstLine);
-  return sanitized || fallback || 'Change requested on page';
+  let candidate = sanitizeForTitle(firstLine);
+  candidate = candidate.replace(/[.!?]+$/g, '').trim();
+
+  if (candidate.length > MAX_AUTO_TITLE_LENGTH) {
+    candidate = candidate.slice(0, MAX_AUTO_TITLE_LENGTH).trim();
+  }
+
+  if (candidate) {
+    candidate = candidate.charAt(0).toUpperCase() + candidate.slice(1);
+  }
+
+  return candidate || fallback || 'Change requested on page';
 }
 
 function buildDefaultTitle(context) {

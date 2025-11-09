@@ -325,56 +325,18 @@
         <h2>🔐 GitHub Authentication</h2>
         
         <div class="info-box">
-          <strong>📋 Quick Setup (3 steps)</strong>
-          <ol style="margin: 8px 0 0 0; padding-left: 20px; line-height: 1.8;">
-            <li><strong>Create OAuth App:</strong> Go to <a href="https://github.com/settings/developers" target="_blank" class="link">github.com/settings/developers</a> → Click "New OAuth App" → Use callback URL: <code>http://localhost</code></li>
-            <li><strong>Save Client ID:</strong> Copy your Client ID from the OAuth App page → Paste it below → Click "Save"</li>
-            <li><strong>Sign In:</strong> Click "Sign in with GitHub" → Enter the code shown → Authorize → Done! 🎉</li>
-          </ol>
-          <p style="margin-top: 12px;">
-            Need detailed help? See <a href="https://github.com/ralph-cmyk/Chrome-Issue-Reporter/blob/main/SETUP.md" target="_blank" class="link">SETUP.md</a> for step-by-step guide.
+          <strong>📋 How sign-in works</strong>
+          <p style="margin: 0 0 12px 0;">
+            Click <em>Connect with GitHub</em> and we will copy the verification code to your clipboard automatically. Paste it into the GitHub tab that opens, approve the device, and you’re done.
+          </p>
+          <p style="margin: 0;">
+            Requested scopes: <code>repo</code>, <code>project</code>, and <code>read:org</code> (needed for GitHub Projects).
           </p>
         </div>
         
-        <label for="client-id">
-          <span style="display: inline-flex; align-items: center; gap: 8px;">
-            Step 1: GitHub OAuth App Client ID *
-            <a href="https://github.com/settings/developers" target="_blank" style="font-size: 0.85rem; font-weight: normal;">(Create one here →)</a>
-          </span>
-        </label>
-        <input 
-          id="client-id" 
-          name="client-id" 
-          type="text" 
-          placeholder="e.g. Ov23liYourClientIdHere" 
-        />
-        <p class="hint">
-          Required: Your GitHub OAuth App Client ID (starts with "Ov23"). 
-          Create one at <a href="https://github.com/settings/developers" target="_blank" class="link">github.com/settings/developers</a>
-        </p>
-        
-        <label for="client-secret">GitHub OAuth App Client Secret (Optional)</label>
-        <input 
-          id="client-secret" 
-          name="client-secret" 
-          type="password" 
-          placeholder="Optional" 
-        />
-        <p class="hint">
-          Optional: Client Secret is not required but can be stored for future use.
-        </p>
-        
-        <div class="actions">
-          <button id="save-oauth-config" type="button" class="primary">
-            💾 Save OAuth Configuration
-          </button>
-        </div>
-        
-        <div class="divider"></div>
-        
         <div class="actions">
           <button id="oauth-signin" type="button" class="primary">
-            🔐 Sign in with GitHub
+            🔐 Connect with GitHub
           </button>
           <button id="sign-out" type="button" class="danger">
             🚪 Sign Out
@@ -382,8 +344,7 @@
         </div>
 
         <p class="hint">
-          Once you authorize the extension, the token is stored securely in Chrome's sync storage 
-          and never leaves your browser.
+          Verification code is copied automatically—just press ⌘/Ctrl + V on GitHub. Once authorized, the token stays in Chrome sync storage and never leaves your browser.
         </p>
 
         <div class="divider"></div>

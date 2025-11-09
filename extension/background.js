@@ -3,7 +3,6 @@ import { buildSanitizedIssue } from './sanitizer.js';
 
 const TOKEN_KEY = 'github_token';
 const CONFIG_KEY = 'repo_config';
-const OAUTH_CONFIG_KEY = 'oauth_config';
 const LAST_CONTEXT_KEY = 'last_context';
 const LAST_ISSUE_KEY = 'last_issue';
 const CONTEXT_MENU_ID = 'create-github-issue';
@@ -12,6 +11,8 @@ const SCRIPT_INITIALIZATION_DELAY = 100; // ms to wait for content script to ini
 const LAST_MILESTONE_KEY = 'last_milestone';
 const LAST_COLUMN_KEY = 'last_column';
 const UNSUPPORTED_URL_PREFIXES = ['chrome://', 'chrome-extension://', 'edge://', 'about:'];
+const GITHUB_GRAPHQL_URL = 'https://api.github.com/graphql';
+const DEFAULT_DEVICE_FLOW_CLIENT_ID = 'Iv1.0fa3exampleclientid';
 
 // GitHub OAuth Configuration
 const GITHUB_DEVICE_CODE_URL = 'https://github.com/login/device/code';
@@ -93,16 +94,6 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
         sendResponse({ success: true });
         break;
       }
-      case 'getOAuthConfig': {
-        const config = await getOAuthConfig();
-        sendResponse({ success: true, config });
-        break;
-      }
-      case 'saveOAuthConfig': {
-        await saveOAuthConfig(message.config);
-        sendResponse({ success: true });
-        break;
-      }
       case 'getAuthState': {
         const token = await getStoredToken();
         sendResponse({
@@ -163,7 +154,7 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
       }
       case 'getProjectColumns': {
         try {
-          if (typeof message.projectId !== 'number') {
+          if (typeof message.projectId !== 'string') {
             throw new Error('Project id is required to load columns.');
           }
           const columns = await fetchProjectColumns(message.projectId);
@@ -321,25 +312,6 @@ async function saveRepoConfig(config = {}) {
   await chrome.storage.sync.set({ [CONFIG_KEY]: sanitized });
 }
 
-async function getOAuthConfig() {
-  const data = await chrome.storage.sync.get(OAUTH_CONFIG_KEY);
-  if (data && data[OAUTH_CONFIG_KEY]) {
-    return data[OAUTH_CONFIG_KEY];
-  }
-  return {
-    clientId: '',
-    clientSecret: ''
-  };
-}
-
-async function saveOAuthConfig(config = {}) {
-  const sanitized = {
-    clientId: config.clientId || '',
-    clientSecret: config.clientSecret || ''
-  };
-  await chrome.storage.sync.set({ [OAUTH_CONFIG_KEY]: sanitized });
-}
-
 async function getStoredToken() {
   const data = await chrome.storage.sync.get(TOKEN_KEY);
   return data?.[TOKEN_KEY] || null;
@@ -359,21 +331,13 @@ async function clearStoredToken() {
 
 async function startDeviceFlow(scopes = 'repo') {
   try {
-    // Get the user-configured OAuth client ID
-    const oauthConfig = await getOAuthConfig();
-    const clientId = oauthConfig.clientId;
+    const storedConfig = await chrome.storage.sync.get('oauth_config');
+    const configuredClientId = storedConfig?.oauth_config?.clientId;
+    const clientId = configuredClientId || DEFAULT_DEVICE_FLOW_CLIENT_ID;
     
     if (!clientId) {
       throw new Error(
-        'OAuth Client ID not configured!\n\n' +
-        'Please configure your GitHub OAuth App Client ID in the extension options before signing in.\n\n' +
-        'Steps:\n' +
-        '1. Go to https://github.com/settings/developers\n' +
-        '2. Create a new OAuth App (or use existing)\n' +
-        '3. Copy the Client ID\n' +
-        '4. Enter it in the extension options\n' +
-        '5. Save and try again\n\n' +
-        'See INSTALL.md for detailed instructions.'
+        'GitHub OAuth Client ID missing. Please configure it in the extension settings.'
       );
     }
     
@@ -439,9 +403,9 @@ async function pollForDeviceToken(deviceCode, interval = 5) {
   const maxAttempts = 60; // 5 minutes with 5 second intervals
   let attempts = 0;
   
-  // Get the user-configured OAuth client ID
-  const oauthConfig = await getOAuthConfig();
-  const clientId = oauthConfig.clientId;
+  const storedConfig = await chrome.storage.sync.get('oauth_config');
+  const configuredClientId = storedConfig?.oauth_config?.clientId;
+  const clientId = configuredClientId || DEFAULT_DEVICE_FLOW_CLIENT_ID;
   
   if (!clientId) {
     throw new Error('OAuth Client ID not configured');
@@ -526,7 +490,7 @@ async function fetchUserRepos() {
   if (!token) {
     throw new Error('Authentication required.');
   }
-  
+
   try {
     const response = await fetch('https://api.github.com/user/repos?per_page=100&sort=updated', {
       headers: {
@@ -570,19 +534,18 @@ async function createIssue(payload = {}) {
     throw new Error('Repository configuration is incomplete. Please configure owner and repo in settings.');
   }
 
-  // Extract user input and context
   const userInput = {
     title: payload.title?.trim() || '',
     description: payload.description?.trim() || ''
   };
-  
+
   const context = payload.context || {};
   const screenshotDataUrl = typeof payload.screenshotDataUrl === 'string' ? payload.screenshotDataUrl : null;
   const milestoneNumber = typeof payload.milestoneNumber === 'number' ? payload.milestoneNumber : null;
-  const projectId = typeof payload.projectId === 'number' ? payload.projectId : null;
-  const projectColumnId = typeof payload.projectColumnId === 'number' ? payload.projectColumnId : null;
-  
-  // Build sanitized issue using the sanitizer
+  const projectId = typeof payload.projectId === 'string' ? payload.projectId : null;
+  const projectFieldId = typeof payload.projectFieldId === 'string' ? payload.projectFieldId : null;
+  const projectOptionId = typeof payload.projectOptionId === 'string' ? payload.projectOptionId : null;
+
   const sanitized = buildSanitizedIssue(context, userInput, { screenshotDataUrl });
   const issueBody = sanitized.body;
 
@@ -625,11 +588,17 @@ async function createIssue(payload = {}) {
   }
 
   const issue = await response.json();
-  if (projectColumnId) {
+
+  if (projectId) {
     try {
-      await addIssueToProjectColumn(projectColumnId, issue.id);
+      await addIssueToProjectV2({
+        projectId,
+        contentNodeId: issue.node_id,
+        statusFieldId: projectFieldId,
+        statusOptionId: projectOptionId
+      });
     } catch (error) {
-      console.warn('Failed to add issue to project column', error);
+      console.warn('Failed to add issue to project', error);
     }
   }
 
@@ -640,7 +609,8 @@ async function createIssue(payload = {}) {
     await saveSelectionPreferences({
       milestoneNumber,
       projectId,
-      columnId: projectColumnId
+      statusFieldId: projectFieldId,
+      statusOptionId: projectOptionId
     });
   } catch (error) {
     console.debug('Unable to persist selection preferences', error);
@@ -832,74 +802,87 @@ async function fetchRepoMilestones() {
 }
 
 async function fetchRepoProjects() {
-  const token = await getStoredToken();
-  if (!token) {
-    throw new Error('Authentication required.');
-  }
   const { owner, repo } = await getRepoConfig();
   if (!owner || !repo) {
     throw new Error('Repository not configured.');
   }
 
-  const response = await fetch(`https://api.github.com/repos/${owner}/${repo}/projects`, {
-    headers: {
-      Authorization: `token ${token}`,
-      Accept: 'application/vnd.github.inertia-preview+json'
+  const query = `
+    query($owner: String!, $name: String!) {
+      repository(owner: $owner, name: $name) {
+        projectsV2(first: 25, orderBy: { field: TITLE, direction: ASC }) {
+          nodes {
+            id
+            title
+            number
+            closed
+          }
+        }
+      }
     }
-  });
+  `;
 
-  if (response.status === 401) {
-    await clearStoredToken();
-    throw new Error('Authentication expired. Please sign in again.');
-  }
+  const data = await githubGraphQLRequest(query, { owner, name: repo });
+  const nodes = data?.repository?.projectsV2?.nodes || [];
 
-  if (!response.ok) {
-    throw new Error(`Failed to load projects (status ${response.status})`);
-  }
-
-  const data = await response.json();
-  return data
-    .filter(project => project.state !== 'closed')
+  return nodes
+    .filter(project => project && project.closed === false)
     .map(project => ({
       id: project.id,
-      name: project.name,
-      body: project.body
+      name: project.title,
+      number: project.number
     }));
 }
 
 async function fetchProjectColumns(projectId) {
-  const token = await getStoredToken();
-  if (!token) {
-    throw new Error('Authentication required.');
-  }
-
-  const response = await fetch(`https://api.github.com/projects/${projectId}/columns`, {
-    headers: {
-      Authorization: `token ${token}`,
-      Accept: 'application/vnd.github.inertia-preview+json'
+  const query = `
+    query($projectId: ID!) {
+      node(id: $projectId) {
+        ... on ProjectV2 {
+          fields(first: 50) {
+            nodes {
+              __typename
+              ... on ProjectV2SingleSelectField {
+                id
+                name
+                options {
+                  id
+                  name
+                }
+              }
+            }
+          }
+        }
+      }
     }
-  });
+  `;
 
-  if (response.status === 401) {
-    await clearStoredToken();
-    throw new Error('Authentication expired. Please sign in again.');
+  const data = await githubGraphQLRequest(query, { projectId });
+  const fields = data?.node?.fields?.nodes || [];
+
+  const statusField =
+    fields.find(field => field?.name?.toLowerCase() === 'status') ||
+    fields.find(field => field?.__typename === 'ProjectV2SingleSelectField');
+
+  if (!statusField) {
+    return { fieldId: null, options: [] };
   }
 
-  if (!response.ok) {
-    throw new Error(`Failed to load project columns (status ${response.status})`);
-  }
-
-  const data = await response.json();
-  return data.map(column => ({
-    id: column.id,
-    name: column.name
+  const options = (statusField.options || []).map(option => ({
+    id: option.id,
+    name: option.name
   }));
+
+  return {
+    fieldId: statusField.id,
+    options
+  };
 }
 
 async function getSelectionPreferences() {
   const { owner, repo } = await getRepoConfig();
   if (!owner || !repo) {
-    return { milestoneNumber: null, projectId: null, columnId: null };
+    return { milestoneNumber: null, projectId: null, statusFieldId: null, statusOptionId: null };
   }
 
   const storage = await chrome.storage.sync.get([LAST_MILESTONE_KEY, LAST_COLUMN_KEY]);
@@ -908,13 +891,14 @@ async function getSelectionPreferences() {
   const milestoneStore = storage?.[LAST_MILESTONE_KEY] || {};
   const columnStore = storage?.[LAST_COLUMN_KEY] || {};
 
-  const milestoneNumber = Number.isFinite(milestoneStore[repoKey]) ? milestoneStore[repoKey] : null;
-  const columnPref = columnStore[repoKey] || null;
+  const milestoneNumber = typeof milestoneStore[repoKey] === 'number' ? milestoneStore[repoKey] : null;
+  const columnPref = columnStore[repoKey] || {};
 
   return {
     milestoneNumber,
-    projectId: columnPref?.projectId ?? null,
-    columnId: columnPref?.columnId ?? null
+    projectId: columnPref.projectId ?? null,
+    statusFieldId: columnPref.statusFieldId ?? null,
+    statusOptionId: columnPref.statusOptionId ?? null
   };
 }
 
@@ -938,11 +922,12 @@ async function saveSelectionPreferences(preferences = {}) {
     }
   }
 
-  if ('projectId' in preferences || 'columnId' in preferences) {
-    if (Number.isFinite(preferences.projectId)) {
+  if ('projectId' in preferences || 'statusOptionId' in preferences || 'statusFieldId' in preferences) {
+    if (preferences.projectId) {
       columnStore[repoKey] = {
         projectId: preferences.projectId,
-        columnId: Number.isFinite(preferences.columnId) ? preferences.columnId : null
+        statusFieldId: preferences.statusFieldId || null,
+        statusOptionId: preferences.statusOptionId || null
       };
     } else {
       delete columnStore[repoKey];
@@ -957,6 +942,88 @@ async function saveSelectionPreferences(preferences = {}) {
 
 function getRepoPreferenceKey(owner, repo) {
   return `${owner}/${repo}`;
+}
+
+async function addIssueToProjectV2({ projectId, contentNodeId, statusFieldId, statusOptionId }) {
+  if (!projectId || !contentNodeId) {
+    return;
+  }
+
+  const addMutation = `
+    mutation($projectId: ID!, $contentId: ID!) {
+      addProjectV2ItemById(input: { projectId: $projectId, contentId: $contentId }) {
+        item {
+          id
+        }
+      }
+    }
+  `;
+
+  const addResult = await githubGraphQLRequest(addMutation, {
+    projectId,
+    contentId: contentNodeId
+  });
+  const itemId = addResult?.addProjectV2ItemById?.item?.id;
+  if (!itemId) {
+    throw new Error('Project item creation failed.');
+  }
+
+  if (statusFieldId && statusOptionId) {
+    const updateMutation = `
+      mutation($projectId: ID!, $itemId: ID!, $fieldId: ID!, $optionId: String!) {
+        updateProjectV2ItemFieldValue(
+          input: {
+            projectId: $projectId,
+            itemId: $itemId,
+            fieldId: $fieldId,
+            value: { singleSelectOptionId: $optionId }
+          }
+        ) {
+          projectV2Item {
+            id
+          }
+        }
+      }
+    `;
+
+    await githubGraphQLRequest(updateMutation, {
+      projectId,
+      itemId,
+      fieldId: statusFieldId,
+      optionId: statusOptionId
+    });
+  }
+}
+
+async function githubGraphQLRequest(query, variables = {}) {
+  const token = await getStoredToken();
+  if (!token) {
+    throw new Error('Authentication required.');
+  }
+
+  const response = await fetch(GITHUB_GRAPHQL_URL, {
+    method: 'POST',
+    headers: {
+      Authorization: `bearer ${token}`,
+      'Content-Type': 'application/json',
+      Accept: 'application/vnd.github+json'
+    },
+    body: JSON.stringify({ query, variables })
+  });
+
+  if (response.status === 401) {
+    await clearStoredToken();
+    throw new Error('Authentication expired. Please sign in again.');
+  }
+
+  const result = await response.json();
+
+  if (!response.ok || result.errors) {
+    const message = result?.errors?.[0]?.message || `GitHub GraphQL error (status ${response.status})`;
+    throw new Error(message);
+  }
+
+  return result.data;
 }
 
 async function safeParseJson(response) {

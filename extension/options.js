@@ -3,11 +3,9 @@ const CLOSE_DELAY_MS = 1500; // Delay before closing the options page after succ
 
 async function init() {
   await loadConfig();
-  await loadOAuthConfig();
   await refreshAuthState();
 
   document.getElementById('save').addEventListener('click', handleSave);
-  document.getElementById('save-oauth-config').addEventListener('click', handleSaveOAuthConfig);
   document.getElementById('oauth-signin').addEventListener('click', handleOAuthSignIn);
   document.getElementById('sign-out').addEventListener('click', handleSignOut);
   
@@ -19,21 +17,6 @@ document.addEventListener('DOMContentLoaded', init);
 
 async function handleOAuthSignIn() {
   const button = document.getElementById('oauth-signin');
-  
-  // Validate OAuth configuration first
-  const oauthConfig = await chrome.runtime.sendMessage({ type: 'getOAuthConfig' });
-  if (!oauthConfig?.success || !oauthConfig.config?.clientId) {
-    setStatus('❌ OAuth Configuration Missing\n\n' +
-      '⚠️ You must configure your GitHub OAuth App Client ID before signing in.\n\n' +
-      '📋 Steps:\n' +
-      '1. Create a GitHub OAuth App at https://github.com/settings/developers\n' +
-      '2. Enter your Client ID in the field above\n' +
-      '3. Click "Save OAuth Configuration"\n' +
-      '4. Then try signing in again\n\n' +
-      'See INSTALL.md for detailed instructions.', 'error');
-    return;
-  }
-  
   button.disabled = true;
   button.classList.add('loading');
   setStatus('🔄 Starting GitHub OAuth flow...', 'info');
@@ -42,7 +25,7 @@ async function handleOAuthSignIn() {
     // Step 1: Start device flow
     const response = await chrome.runtime.sendMessage({ 
       type: 'startDeviceFlow',
-      scopes: 'repo'
+      scopes: 'repo project read:org'
     });
     
     if (!response?.success) {
@@ -52,6 +35,12 @@ async function handleOAuthSignIn() {
     
     const { user_code, verification_uri, device_code, interval } = response;
     
+    try {
+      await navigator.clipboard.writeText(user_code);
+    } catch (clipboardError) {
+      console.warn('Unable to copy verification code to clipboard', clipboardError);
+    }
+    
     // Step 2: Show the code to the user and open GitHub
     const message = `🔑 YOUR VERIFICATION CODE: ${user_code}
 
@@ -59,7 +48,7 @@ async function handleOAuthSignIn() {
 
 📋 Instructions:
 1. A new tab will open to GitHub
-2. Enter the code above: ${user_code}
+2. Paste the copied code: ${user_code}
 3. Authorize the extension
 4. Return to this page
 
@@ -208,52 +197,6 @@ async function loadConfig() {
   }
 }
 
-async function loadOAuthConfig() {
-  const clientIdInput = document.getElementById('client-id');
-  const clientSecretInput = document.getElementById('client-secret');
-
-  const response = await chrome.runtime.sendMessage({ type: 'getOAuthConfig' });
-  if (response?.success && response.config) {
-    clientIdInput.value = response.config.clientId || '';
-    clientSecretInput.value = response.config.clientSecret || '';
-  }
-}
-
-async function handleSaveOAuthConfig() {
-  const clientId = document.getElementById('client-id').value.trim();
-  const clientSecret = document.getElementById('client-secret').value.trim();
-
-  if (!clientId) {
-    setStatus('⚠️ Client ID Required\n\n' +
-      'GitHub OAuth App Client ID is required. Get it from:\n' +
-      'https://github.com/settings/developers', 'error');
-    return;
-  }
-
-  const button = document.getElementById('save-oauth-config');
-  button.disabled = true;
-  button.classList.add('loading');
-
-  const response = await chrome.runtime.sendMessage({
-    type: 'saveOAuthConfig',
-    config: { clientId, clientSecret }
-  });
-
-  button.disabled = false;
-  button.classList.remove('loading');
-
-  if (response?.success) {
-    setStatus('✅ OAuth Configuration saved successfully!\n\n' +
-      `🔑 Client ID: ${clientId.substring(0, 10)}...\n\n` +
-      '💡 You can now sign in with GitHub using the button below.', 'success');
-    // Close the options page after a brief delay to let users see the success message
-    setTimeout(() => window.close(), CLOSE_DELAY_MS);
-  } else {
-    setStatus('❌ Unable to save OAuth configuration\n\n' + 
-      (response?.error || 'Unknown error occurred'), 'error');
-  }
-}
-
 async function handleSave() {
   // Get selected repository from radio buttons
   const selectedRadio = document.querySelector('input[name="repository"]:checked');
@@ -312,7 +255,7 @@ async function refreshAuthState() {
 
   const response = await chrome.runtime.sendMessage({ type: 'getAuthState' });
   if (response?.success && response.authenticated) {
-    oauthSignIn.textContent = '🔄 Re-authenticate with GitHub';
+    oauthSignIn.textContent = '🔄 Reconnect with GitHub';
     oauthSignIn.classList.remove('primary');
     oauthSignIn.classList.add('secondary');
     signOut.disabled = false;
@@ -321,7 +264,7 @@ async function refreshAuthState() {
       setStatus('✅ You are authenticated with GitHub!\n\n💡 Select your repository below and save settings.', 'success');
     }
   } else {
-    oauthSignIn.textContent = '🔐 Sign in with GitHub';
+    oauthSignIn.textContent = '🔐 Connect with GitHub';
     oauthSignIn.classList.remove('secondary');
     oauthSignIn.classList.add('primary');
     signOut.disabled = true;
