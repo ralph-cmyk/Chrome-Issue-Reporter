@@ -9,6 +9,9 @@ const LAST_ISSUE_KEY = 'last_issue';
 const CONTEXT_MENU_ID = 'create-github-issue';
 const MAX_SNIPPET_LENGTH = 5 * 1024; // 5 KB
 const SCRIPT_INITIALIZATION_DELAY = 100; // ms to wait for content script to initialize
+const LAST_MILESTONE_KEY = 'last_milestone';
+const LAST_COLUMN_KEY = 'last_column';
+const UNSUPPORTED_URL_PREFIXES = ['chrome://', 'chrome-extension://', 'edge://', 'about:'];
 
 // GitHub OAuth Configuration
 const GITHUB_DEVICE_CODE_URL = 'https://github.com/login/device/code';
@@ -23,12 +26,41 @@ chrome.runtime.onStartup.addListener(async () => {
   await ensureContextMenu();
 });
 
+chrome.action.onClicked.addListener(async (tab) => {
+  if (!tab?.id) {
+    return;
+  }
+
+  try {
+    const ready = await ensureReadyForIssueCreation(tab);
+    if (!ready) {
+      return;
+    }
+    await ensureContentScript(tab.id);
+    await chrome.tabs.sendMessage(tab.id, { type: 'startIssueFlow' });
+  } catch (error) {
+    console.error('Failed to start issue flow from action click', error);
+    try {
+      await chrome.tabs.sendMessage(tab.id, {
+        type: 'issueFlowError',
+        message: error.message || 'Unable to start issue capture on this page.'
+      });
+    } catch {
+      // No-op if tab cannot be messaged
+    }
+  }
+});
+
 chrome.contextMenus.onClicked.addListener(async (info, tab) => {
   if (info.menuItemId !== CONTEXT_MENU_ID || !tab?.id) {
     return;
   }
 
   try {
+    const ready = await ensureReadyForIssueCreation(tab);
+    if (!ready) {
+      return;
+    }
     const context = await requestContextFromTab(tab.id);
     if (context?.error) {
       console.warn('Context capture reported an error:', context.error);
@@ -36,11 +68,12 @@ chrome.contextMenus.onClicked.addListener(async (info, tab) => {
     }
     if (context) {
       await chrome.storage.local.set({ [LAST_CONTEXT_KEY]: context });
-      try {
-        await chrome.action.openPopup();
-      } catch (popupError) {
-        console.debug('Unable to open popup automatically:', popupError);
-      }
+      await ensureContentScript(tab.id);
+      const payload = await buildIssueModalPayload(context);
+      await chrome.tabs.sendMessage(tab.id, {
+        type: 'showIssueModal',
+        payload
+      });
     }
   } catch (error) {
     console.error('Failed to capture context from tab', error);
@@ -108,6 +141,59 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
         }
         break;
       }
+      case 'getMilestones': {
+        try {
+          const milestones = await fetchRepoMilestones();
+          sendResponse({ success: true, milestones });
+        } catch (error) {
+          console.error('Failed to fetch milestones', error);
+          sendResponse({ success: false, error: error.message || 'Failed to fetch milestones' });
+        }
+        break;
+      }
+      case 'getProjects': {
+        try {
+          const projects = await fetchRepoProjects();
+          sendResponse({ success: true, projects });
+        } catch (error) {
+          console.error('Failed to fetch projects', error);
+          sendResponse({ success: false, error: error.message || 'Failed to fetch projects' });
+        }
+        break;
+      }
+      case 'getProjectColumns': {
+        try {
+          if (typeof message.projectId !== 'number') {
+            throw new Error('Project id is required to load columns.');
+          }
+          const columns = await fetchProjectColumns(message.projectId);
+          sendResponse({ success: true, columns });
+        } catch (error) {
+          console.error('Failed to fetch project columns', error);
+          sendResponse({ success: false, error: error.message || 'Failed to fetch project columns' });
+        }
+        break;
+      }
+      case 'getSelectionPreferences': {
+        try {
+          const preferences = await getSelectionPreferences();
+          sendResponse({ success: true, preferences });
+        } catch (error) {
+          console.error('Failed to load selection preferences', error);
+          sendResponse({ success: false, error: error.message || 'Failed to load preferences' });
+        }
+        break;
+      }
+      case 'saveSelectionPreferences': {
+        try {
+          await saveSelectionPreferences(message.preferences || {});
+          sendResponse({ success: true });
+        } catch (error) {
+          console.error('Failed to save selection preferences', error);
+          sendResponse({ success: false, error: error.message || 'Failed to save preferences' });
+        }
+        break;
+      }
       case 'signOut': {
         await clearStoredToken();
         sendResponse({ success: true });
@@ -139,16 +225,41 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
         break;
       }
       case 'liveSelectComplete': {
-        // Store the context from live select
-        if (message.context) {
-          await chrome.storage.local.set({ [LAST_CONTEXT_KEY]: message.context });
-          try {
-            await chrome.action.openPopup();
-          } catch (popupError) {
-            console.debug('Unable to open popup automatically:', popupError);
-          }
+        const tabId = sender?.tab?.id;
+        if (!tabId) {
+          sendResponse({ success: false, error: 'Missing tab context for live select.' });
+          break;
         }
-        sendResponse({ success: true });
+
+        const context = message.context || null;
+        if (!context) {
+          sendResponse({ success: false, error: 'No context captured from selection.' });
+          break;
+        }
+
+        await chrome.storage.local.set({ [LAST_CONTEXT_KEY]: context });
+
+        let screenshotDataUrl = null;
+        try {
+          screenshotDataUrl = await captureElementScreenshot(tabId, sender.tab.windowId, message.selection || null);
+        } catch (error) {
+          console.warn('Unable to capture screenshot for selection', error);
+        }
+
+        try {
+          const payload = await buildIssueModalPayload(context, screenshotDataUrl);
+          await chrome.tabs.sendMessage(tabId, {
+            type: 'showIssueModal',
+            payload,
+            fromLiveSelect: true
+          });
+        } catch (error) {
+          console.error('Failed to show issue modal after live select', error);
+          sendResponse({ success: false, error: error.message || 'Failed to open issue modal.' });
+          break;
+        }
+
+        sendResponse({ success: true, screenshotCaptured: Boolean(screenshotDataUrl) });
         break;
       }
       default:
@@ -466,26 +577,19 @@ async function createIssue(payload = {}) {
   };
   
   const context = payload.context || {};
+  const screenshotDataUrl = typeof payload.screenshotDataUrl === 'string' ? payload.screenshotDataUrl : null;
+  const milestoneNumber = typeof payload.milestoneNumber === 'number' ? payload.milestoneNumber : null;
+  const projectId = typeof payload.projectId === 'number' ? payload.projectId : null;
+  const projectColumnId = typeof payload.projectColumnId === 'number' ? payload.projectColumnId : null;
   
   // Build sanitized issue using the sanitizer
-  const sanitized = buildSanitizedIssue(context, userInput);
-  
+  const sanitized = buildSanitizedIssue(context, userInput, { screenshotDataUrl });
+  const issueBody = sanitized.body;
+
   const requestLabels = Array.isArray(payload.labels) ? payload.labels : labels || [];
 
   if (!sanitized.title) {
     throw new Error('Issue title is required.');
-  }
-
-  // Check if user wants to assign to copilot
-  const assignToCopilot = payload.assignToCopilot === true;
-  let issueBody = sanitized.body;
-  
-  if (assignToCopilot) {
-    // GitHub Copilot cannot be assigned via the REST API like a regular user.
-    // Instead, we mention @copilot in the issue body. When @copilot is mentioned,
-    // GitHub's Copilot integration allows users to interact with Copilot in the issue
-    // comments to get AI-assisted help with the problem.
-    issueBody = `@copilot\n\n` + issueBody;
   }
 
   const response = await fetch(`https://api.github.com/repos/${owner}/${repo}/issues`, {
@@ -499,7 +603,8 @@ async function createIssue(payload = {}) {
     body: JSON.stringify({
       title: sanitized.title,
       body: issueBody,
-      labels: requestLabels
+      labels: requestLabels,
+      milestone: milestoneNumber || undefined
     })
   });
 
@@ -520,9 +625,338 @@ async function createIssue(payload = {}) {
   }
 
   const issue = await response.json();
+  if (projectColumnId) {
+    try {
+      await addIssueToProjectColumn(projectColumnId, issue.id);
+    } catch (error) {
+      console.warn('Failed to add issue to project column', error);
+    }
+  }
+
   const summary = { html_url: issue.html_url, number: issue.number, title: issue.title };
   await chrome.storage.local.set({ [LAST_ISSUE_KEY]: summary });
+
+  try {
+    await saveSelectionPreferences({
+      milestoneNumber,
+      projectId,
+      columnId: projectColumnId
+    });
+  } catch (error) {
+    console.debug('Unable to persist selection preferences', error);
+  }
+
   return summary;
+}
+
+async function ensureReadyForIssueCreation(tab) {
+  const token = await getStoredToken();
+  const config = await getRepoConfig();
+
+  const isConfigured = Boolean(token) && Boolean(config.owner) && Boolean(config.repo);
+  if (!isConfigured) {
+    await chrome.runtime.openOptionsPage();
+    return false;
+  }
+
+  if (tab?.url && UNSUPPORTED_URL_PREFIXES.some(prefix => tab.url.startsWith(prefix))) {
+    throw new Error('Chrome Issue Reporter is not available on this page.');
+  }
+
+  return true;
+}
+
+async function ensureContentScript(tabId) {
+  try {
+    const ping = await chrome.tabs.sendMessage(tabId, { type: 'ping' });
+    if (ping?.success) {
+      return;
+    }
+  } catch (error) {
+    // ignore and attempt injection
+  }
+
+  await chrome.scripting.executeScript({
+    target: { tabId },
+    files: ['content.js']
+  });
+  await sleep(SCRIPT_INITIALIZATION_DELAY);
+
+  try {
+    const ping = await chrome.tabs.sendMessage(tabId, { type: 'ping' });
+    if (!ping?.success) {
+      throw new Error('Content script did not confirm readiness.');
+    }
+  } catch (error) {
+    console.error('Content script injection failed', error);
+    throw new Error('Content script initialization failed. The page may not support extensions or may be loading.');
+  }
+}
+
+async function buildIssueModalPayload(context, screenshotDataUrl) {
+  const config = await getRepoConfig();
+  const preferences = await getSelectionPreferences();
+  const lastIssueData = await chrome.storage.local.get(LAST_ISSUE_KEY);
+
+  return {
+    context,
+    screenshotDataUrl,
+    repo: config?.owner && config?.repo
+      ? { owner: config.owner, name: config.repo }
+      : null,
+    preferences,
+    lastIssue: lastIssueData?.[LAST_ISSUE_KEY] || null
+  };
+}
+
+async function captureElementScreenshot(tabId, windowId, selection) {
+  let baseDataUrl;
+  try {
+    baseDataUrl = await chrome.tabs.captureVisibleTab(windowId, { format: 'png' });
+  } catch (error) {
+    console.warn('captureVisibleTab failed', error);
+    return null;
+  }
+
+  if (!selection?.rect) {
+    return baseDataUrl;
+  }
+
+  const { rect, devicePixelRatio } = selection;
+  const scale = Number.isFinite(devicePixelRatio) && devicePixelRatio > 0 ? devicePixelRatio : 1;
+  const cropWidth = Math.max(1, Math.round(rect.width * scale));
+  const cropHeight = Math.max(1, Math.round(rect.height * scale));
+
+  if (cropWidth < 2 || cropHeight < 2) {
+    return baseDataUrl;
+  }
+
+  try {
+    const response = await fetch(baseDataUrl);
+    const blob = await response.blob();
+    const bitmap = await createImageBitmap(blob);
+
+    const MAX_OUTPUT_DIMENSION = 900;
+    let outputWidth = cropWidth;
+    let outputHeight = cropHeight;
+    if (outputWidth > MAX_OUTPUT_DIMENSION || outputHeight > MAX_OUTPUT_DIMENSION) {
+      const scaleFactor = Math.min(
+        MAX_OUTPUT_DIMENSION / outputWidth,
+        MAX_OUTPUT_DIMENSION / outputHeight
+      );
+      outputWidth = Math.max(1, Math.round(outputWidth * scaleFactor));
+      outputHeight = Math.max(1, Math.round(outputHeight * scaleFactor));
+    }
+
+    const canvas = new OffscreenCanvas(outputWidth, outputHeight);
+    const ctx = canvas.getContext('2d');
+    const sx = Math.max(0, Math.min(bitmap.width - cropWidth, Math.round(rect.left * scale)));
+    const sy = Math.max(0, Math.min(bitmap.height - cropHeight, Math.round(rect.top * scale)));
+
+    ctx.drawImage(bitmap, sx, sy, cropWidth, cropHeight, 0, 0, outputWidth, outputHeight);
+    const croppedBlob = await canvas.convertToBlob({ type: 'image/png' });
+    const buffer = await croppedBlob.arrayBuffer();
+    return `data:image/png;base64,${arrayBufferToBase64(buffer)}`;
+  } catch (error) {
+    console.warn('Unable to crop screenshot to selection', error);
+    return baseDataUrl;
+  }
+}
+
+function arrayBufferToBase64(buffer) {
+  const bytes = new Uint8Array(buffer);
+  const chunkSize = 0x8000;
+  let binary = '';
+  for (let i = 0; i < bytes.length; i += chunkSize) {
+    const chunk = bytes.subarray(i, i + chunkSize);
+    binary += String.fromCharCode(...chunk);
+  }
+  return btoa(binary);
+}
+
+async function addIssueToProjectColumn(columnId, issueId) {
+  const token = await getStoredToken();
+  if (!token || !columnId || !issueId) {
+    return;
+  }
+
+  await fetch(`https://api.github.com/projects/columns/${columnId}/cards`, {
+    method: 'POST',
+    headers: {
+      Authorization: `token ${token}`,
+      Accept: 'application/vnd.github.inertia-preview+json',
+      'Content-Type': 'application/json'
+    },
+    body: JSON.stringify({
+      content_id: issueId,
+      content_type: 'Issue'
+    })
+  });
+}
+
+async function fetchRepoMilestones() {
+  const token = await getStoredToken();
+  if (!token) {
+    throw new Error('Authentication required.');
+  }
+  const { owner, repo } = await getRepoConfig();
+  if (!owner || !repo) {
+    throw new Error('Repository not configured.');
+  }
+
+  const response = await fetch(`https://api.github.com/repos/${owner}/${repo}/milestones?state=open&direction=asc`, {
+    headers: {
+      Authorization: `token ${token}`,
+      Accept: 'application/vnd.github+json',
+      'X-GitHub-Api-Version': '2022-11-28'
+    }
+  });
+
+  if (response.status === 401) {
+    await clearStoredToken();
+    throw new Error('Authentication expired. Please sign in again.');
+  }
+
+  if (!response.ok) {
+    throw new Error(`Failed to load milestones (status ${response.status})`);
+  }
+
+  const data = await response.json();
+  return data.map(milestone => ({
+    number: milestone.number,
+    title: milestone.title,
+    description: milestone.description,
+    state: milestone.state,
+    due_on: milestone.due_on
+  }));
+}
+
+async function fetchRepoProjects() {
+  const token = await getStoredToken();
+  if (!token) {
+    throw new Error('Authentication required.');
+  }
+  const { owner, repo } = await getRepoConfig();
+  if (!owner || !repo) {
+    throw new Error('Repository not configured.');
+  }
+
+  const response = await fetch(`https://api.github.com/repos/${owner}/${repo}/projects`, {
+    headers: {
+      Authorization: `token ${token}`,
+      Accept: 'application/vnd.github.inertia-preview+json'
+    }
+  });
+
+  if (response.status === 401) {
+    await clearStoredToken();
+    throw new Error('Authentication expired. Please sign in again.');
+  }
+
+  if (!response.ok) {
+    throw new Error(`Failed to load projects (status ${response.status})`);
+  }
+
+  const data = await response.json();
+  return data
+    .filter(project => project.state !== 'closed')
+    .map(project => ({
+      id: project.id,
+      name: project.name,
+      body: project.body
+    }));
+}
+
+async function fetchProjectColumns(projectId) {
+  const token = await getStoredToken();
+  if (!token) {
+    throw new Error('Authentication required.');
+  }
+
+  const response = await fetch(`https://api.github.com/projects/${projectId}/columns`, {
+    headers: {
+      Authorization: `token ${token}`,
+      Accept: 'application/vnd.github.inertia-preview+json'
+    }
+  });
+
+  if (response.status === 401) {
+    await clearStoredToken();
+    throw new Error('Authentication expired. Please sign in again.');
+  }
+
+  if (!response.ok) {
+    throw new Error(`Failed to load project columns (status ${response.status})`);
+  }
+
+  const data = await response.json();
+  return data.map(column => ({
+    id: column.id,
+    name: column.name
+  }));
+}
+
+async function getSelectionPreferences() {
+  const { owner, repo } = await getRepoConfig();
+  if (!owner || !repo) {
+    return { milestoneNumber: null, projectId: null, columnId: null };
+  }
+
+  const storage = await chrome.storage.sync.get([LAST_MILESTONE_KEY, LAST_COLUMN_KEY]);
+  const repoKey = getRepoPreferenceKey(owner, repo);
+
+  const milestoneStore = storage?.[LAST_MILESTONE_KEY] || {};
+  const columnStore = storage?.[LAST_COLUMN_KEY] || {};
+
+  const milestoneNumber = Number.isFinite(milestoneStore[repoKey]) ? milestoneStore[repoKey] : null;
+  const columnPref = columnStore[repoKey] || null;
+
+  return {
+    milestoneNumber,
+    projectId: columnPref?.projectId ?? null,
+    columnId: columnPref?.columnId ?? null
+  };
+}
+
+async function saveSelectionPreferences(preferences = {}) {
+  const { owner, repo } = await getRepoConfig();
+  if (!owner || !repo) {
+    return;
+  }
+
+  const repoKey = getRepoPreferenceKey(owner, repo);
+  const storage = await chrome.storage.sync.get([LAST_MILESTONE_KEY, LAST_COLUMN_KEY]);
+
+  const milestoneStore = { ...(storage?.[LAST_MILESTONE_KEY] || {}) };
+  const columnStore = { ...(storage?.[LAST_COLUMN_KEY] || {}) };
+
+  if ('milestoneNumber' in preferences) {
+    if (Number.isFinite(preferences.milestoneNumber)) {
+      milestoneStore[repoKey] = preferences.milestoneNumber;
+    } else {
+      delete milestoneStore[repoKey];
+    }
+  }
+
+  if ('projectId' in preferences || 'columnId' in preferences) {
+    if (Number.isFinite(preferences.projectId)) {
+      columnStore[repoKey] = {
+        projectId: preferences.projectId,
+        columnId: Number.isFinite(preferences.columnId) ? preferences.columnId : null
+      };
+    } else {
+      delete columnStore[repoKey];
+    }
+  }
+
+  await chrome.storage.sync.set({
+    [LAST_MILESTONE_KEY]: milestoneStore,
+    [LAST_COLUMN_KEY]: columnStore
+  });
+}
+
+function getRepoPreferenceKey(owner, repo) {
+  return `${owner}/${repo}`;
 }
 
 async function safeParseJson(response) {
@@ -534,35 +968,12 @@ async function safeParseJson(response) {
 }
 
 async function requestContextFromTab(tabId) {
+  await ensureContentScript(tabId);
   try {
-    // Try to send message first
     return await chrome.tabs.sendMessage(tabId, { type: 'captureContext' });
   } catch (error) {
-    // Content script not loaded, try to inject it
-    try {
-      await chrome.scripting.executeScript({
-        target: { tabId },
-        files: ['content.js']
-      });
-      
-      // Wait for the script to initialize
-      await new Promise(resolve => setTimeout(resolve, SCRIPT_INITIALIZATION_DELAY));
-      
-      // Try sending the message again
-      try {
-        return await chrome.tabs.sendMessage(tabId, { type: 'captureContext' });
-      } catch (messageError) {
-        console.error('Content script injected but failed to respond', messageError);
-        throw new Error('Content script initialization failed. The page may not support extensions or may be loading.');
-      }
-    } catch (injectError) {
-      // Check if this is a script injection error or the inner message error
-      if (injectError.message && injectError.message.includes('initialization failed')) {
-        throw injectError;
-      }
-      console.error('Unable to inject content script', injectError);
-      throw new Error('Cannot access this page. The page may be restricted or protected.');
-    }
+    console.error('Failed to request context from tab', error);
+    throw new Error('Unable to capture context from this page.');
   }
 }
 

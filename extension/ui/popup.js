@@ -16,7 +16,6 @@ const createButton = document.getElementById('create');
 const liveSelectButton = document.getElementById('live-select');
 const openOptionsLink = document.getElementById('open-options');
 const repoInfoEl = document.getElementById('repo-info');
-const assignCopilotCheckbox = document.getElementById('assign-copilot');
 
 init();
 
@@ -153,8 +152,7 @@ async function handleSubmit(event) {
         title,
         description,
         context,
-        labels: defaultLabels,
-        assignToCopilot: assignCopilotCheckbox.checked
+        labels: defaultLabels
       }
     });
 
@@ -166,7 +164,6 @@ async function handleSubmit(event) {
       // Clear the form
       titleInput.value = '';
       descriptionInput.value = '';
-      assignCopilotCheckbox.checked = false;
       technicalContextInput.value = '';
       
       // Clear cached context
