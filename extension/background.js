@@ -12,7 +12,7 @@ const LAST_MILESTONE_KEY = 'last_milestone';
 const LAST_COLUMN_KEY = 'last_column';
 const UNSUPPORTED_URL_PREFIXES = ['chrome://', 'chrome-extension://', 'edge://', 'about:'];
 const GITHUB_GRAPHQL_URL = 'https://api.github.com/graphql';
-const DEFAULT_DEVICE_FLOW_CLIENT_ID = 'Iv1.0fa3exampleclientid';
+const DEFAULT_DEVICE_FLOW_CLIENT_ID = 'Ov23liZ5WHrt9Wf9FcLN';
 
 // GitHub OAuth Configuration
 const GITHUB_DEVICE_CODE_URL = 'https://github.com/login/device/code';
