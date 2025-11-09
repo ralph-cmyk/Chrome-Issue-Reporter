@@ -11,6 +11,7 @@ const SCRIPT_INITIALIZATION_DELAY = 100; // ms to wait for content script to ini
 const LAST_MILESTONE_KEY = 'last_milestone';
 const LAST_COLUMN_KEY = 'last_column';
 const UNSUPPORTED_URL_PREFIXES = ['chrome://', 'chrome-extension://', 'edge://', 'about:'];
+const MAX_SCREENSHOT_BYTES = 45 * 1024; // limit inline screenshot so GitHub accepts the issue body
 const GITHUB_GRAPHQL_URL = 'https://api.github.com/graphql';
 const DEFAULT_DEVICE_FLOW_CLIENT_ID = 'Ov23liZ5WHrt9Wf9FcLN';
 
@@ -706,7 +707,7 @@ async function captureElementScreenshot(tabId, windowId, selection) {
     const blob = await response.blob();
     const bitmap = await createImageBitmap(blob);
 
-    const MAX_OUTPUT_DIMENSION = 900;
+    const MAX_OUTPUT_DIMENSION = 320;
     let outputWidth = cropWidth;
     let outputHeight = cropHeight;
     if (outputWidth > MAX_OUTPUT_DIMENSION || outputHeight > MAX_OUTPUT_DIMENSION) {
@@ -724,12 +725,32 @@ async function captureElementScreenshot(tabId, windowId, selection) {
     const sy = Math.max(0, Math.min(bitmap.height - cropHeight, Math.round(rect.top * scale)));
 
     ctx.drawImage(bitmap, sx, sy, cropWidth, cropHeight, 0, 0, outputWidth, outputHeight);
-    const croppedBlob = await canvas.convertToBlob({ type: 'image/png' });
+    const qualityLevels = [0.65, 0.45, 0.3];
+    let croppedBlob = null;
+
+    for (const quality of qualityLevels) {
+      const blobCandidate = await canvas.convertToBlob({ type: 'image/jpeg', quality });
+      if (blobCandidate.size <= MAX_SCREENSHOT_BYTES || quality === qualityLevels[qualityLevels.length - 1]) {
+        croppedBlob = blobCandidate;
+        break;
+      }
+    }
+
+    if (!croppedBlob) {
+      return null;
+    }
+
     const buffer = await croppedBlob.arrayBuffer();
-    return `data:image/png;base64,${arrayBufferToBase64(buffer)}`;
+    const base64 = arrayBufferToBase64(buffer);
+    if ((croppedBlob.size || buffer.byteLength) > MAX_SCREENSHOT_BYTES) {
+      console.warn('Screenshot still exceeds inline limit, skipping image attachment.');
+      return null;
+    }
+
+    return `data:image/jpeg;base64,${base64}`;
   } catch (error) {
     console.warn('Unable to crop screenshot to selection', error);
-    return baseDataUrl;
+    return null;
   }
 }
 
