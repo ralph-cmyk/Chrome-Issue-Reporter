@@ -46,7 +46,9 @@ function buildSanitizedIssue(context = {}, userInput = {}, extras = {}) {
   
   // Build each section
   const header = buildHeader(context);
+  const elementContext = buildElementContext(context);
   const description = buildDescription(userInput.description || '');
+  const consoleSummary = buildConsoleSummary(context.consoleLogs);
   const jsError = buildJsError(context.jsError);
   const consoleLogs = buildConsoleLogs(context.consoleLogs);
   const networkSample = buildNetworkSample(context.networkRequests);
@@ -54,7 +56,9 @@ function buildSanitizedIssue(context = {}, userInput = {}, extras = {}) {
   
   // Add sections in order (omit empty ones)
   if (header) sections.push(header);
+  if (elementContext) sections.push(elementContext);
   if (description) sections.push(description);
+  if (consoleSummary) sections.push(consoleSummary);
   if (jsError) sections.push(jsError);
   if (consoleLogs) sections.push(consoleLogs);
   if (networkSample) sections.push(networkSample);
@@ -149,6 +153,31 @@ function buildHeader(context) {
 }
 
 /**
+ * Adds quick context about the selected element and page selection.
+ */
+function buildElementContext(context = {}) {
+  const rows = [];
+
+  if (context.elementDescription) {
+    rows.push(`- **Element:** ${redactText(context.elementDescription)}`);
+  }
+
+  if (context.cssSelector) {
+    rows.push(`- **Selector:** \`${redactText(context.cssSelector)}\``);
+  }
+
+  if (context.selectedText) {
+    rows.push(`- **Selected Text:** ${truncateAndRedact(context.selectedText, 180)}`);
+  }
+
+  if (!rows.length) {
+    return '';
+  }
+
+  return `## Element Context\n\n${rows.join('\n')}`;
+}
+
+/**
  * Builds description section (what's wrong)
  */
 function buildDescription(description) {
@@ -231,6 +260,40 @@ function buildConsoleLogs(logs) {
   }
   
   return wrapInDetails('Console Logs', content);
+}
+
+function buildConsoleSummary(logs) {
+  if (!logs || !Array.isArray(logs) || logs.length === 0) {
+    return '';
+  }
+
+  let errors = 0;
+  let warns = 0;
+  let infos = 0;
+  let debugs = 0;
+  for (const log of logs) {
+    if (!log?.type) continue;
+    if (log.type === 'error') errors++;
+    else if (log.type === 'warn') warns++;
+    else if (log.type === 'info') infos++;
+    else if (log.type === 'debug') debugs++;
+  }
+
+  const latestError = logs.slice().reverse().find(log => log.type === 'error');
+  const latestWarn = logs.slice().reverse().find(log => log.type === 'warn');
+
+  const lines = [];
+  lines.push(`- Errors: **${errors}** • Warnings: **${warns}** • Infos: ${infos} • Debug: ${debugs}`);
+
+  if (latestError?.message) {
+    lines.push(`- Last error: ${truncateAndRedact(latestError.message, 200)}`);
+  }
+
+  if (latestWarn?.message) {
+    lines.push(`- Last warning: ${truncateAndRedact(latestWarn.message, 200)}`);
+  }
+
+  return `## Console Snapshot\n\n${lines.join('\n')}`;
 }
 
 /**
@@ -473,6 +536,15 @@ function generateContextHash(context) {
   }
   
   return Math.abs(hash).toString(16).padStart(8, '0');
+}
+
+function truncateAndRedact(text, limit) {
+  if (!text) return '';
+  let content = redactText(text);
+  if (content.length > limit) {
+    content = content.slice(0, limit - 1) + '…';
+  }
+  return content;
 }
 
 // Export for use in background.js (ES module)
