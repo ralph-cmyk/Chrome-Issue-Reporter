@@ -11,7 +11,8 @@ const SCRIPT_INITIALIZATION_DELAY = 100; // ms to wait for content script to ini
 const LAST_MILESTONE_KEY = 'last_milestone';
 const LAST_COLUMN_KEY = 'last_column';
 const UNSUPPORTED_URL_PREFIXES = ['chrome://', 'chrome-extension://', 'edge://', 'about:'];
-const MAX_SCREENSHOT_BYTES = 45 * 1024; // limit inline screenshot so GitHub accepts the issue body
+const MAX_SCREENSHOT_BYTES = 20 * 1024; // limit inline screenshot so GitHub accepts the issue body
+const MAX_SCREENSHOT_DATA_URL_LENGTH = 32000;
 const GITHUB_GRAPHQL_URL = 'https://api.github.com/graphql';
 const DEFAULT_DEVICE_FLOW_CLIENT_ID = 'Ov23liZ5WHrt9Wf9FcLN';
 
@@ -547,8 +548,8 @@ async function createIssue(payload = {}) {
   const projectFieldId = typeof payload.projectFieldId === 'string' ? payload.projectFieldId : null;
   const projectOptionId = typeof payload.projectOptionId === 'string' ? payload.projectOptionId : null;
 
-  const sanitized = buildSanitizedIssue(context, userInput, { screenshotDataUrl });
-  const issueBody = sanitized.body;
+  const sanitized = buildSanitizedIssue(context, userInput);
+  let issueBody = sanitized.body;
 
   const requestLabels = Array.isArray(payload.labels) ? payload.labels : labels || [];
 
@@ -589,6 +590,7 @@ async function createIssue(payload = {}) {
   }
 
   const issue = await response.json();
+  let screenshotAttachmentUrl = null;
 
   if (projectId) {
     try {
@@ -600,6 +602,26 @@ async function createIssue(payload = {}) {
       });
     } catch (error) {
       console.warn('Failed to add issue to project', error);
+    }
+  }
+
+  if (screenshotDataUrl) {
+    try {
+      const attachment = await uploadIssueAttachment({
+        owner,
+        repo,
+        issueNumber: issue.number,
+        dataUrl: screenshotDataUrl,
+        token
+      });
+      screenshotAttachmentUrl = attachment?.url || attachment?.download_url || null;
+      if (screenshotAttachmentUrl) {
+        const augmentedBody = `${issueBody}\n\n![Selected Element Screenshot](${screenshotAttachmentUrl})`;
+        await patchIssueBody(owner, repo, issue.number, augmentedBody, token);
+        issueBody = augmentedBody;
+      }
+    } catch (error) {
+      console.warn('Screenshot attachment failed', error);
     }
   }
 
@@ -747,7 +769,13 @@ async function captureElementScreenshot(tabId, windowId, selection) {
       return null;
     }
 
-    return `data:image/jpeg;base64,${base64}`;
+    const dataUrl = `data:image/jpeg;base64,${base64}`;
+    if (dataUrl.length > MAX_SCREENSHOT_DATA_URL_LENGTH) {
+      console.warn('Screenshot data URL length exceeds limit, skipping image attachment.');
+      return null;
+    }
+
+    return dataUrl;
   } catch (error) {
     console.warn('Unable to crop screenshot to selection', error);
     return null;
@@ -1045,6 +1073,66 @@ async function githubGraphQLRequest(query, variables = {}) {
   }
 
   return result.data;
+}
+
+async function uploadIssueAttachment({ owner, repo, issueNumber, dataUrl, token }) {
+  const blob = await dataUrlToBlob(dataUrl);
+  if (!blob) {
+    return null;
+  }
+
+  const filename = `screenshot-${Date.now()}.jpg`;
+  const uploadUrl = `https://uploads.github.com/repos/${owner}/${repo}/issues/${issueNumber}/assets?name=${encodeURIComponent(filename)}`;
+
+  const formData = new FormData();
+  formData.append('attachment', blob, filename);
+
+  const response = await fetch(uploadUrl, {
+    method: 'POST',
+    headers: {
+      Authorization: `token ${token}`,
+      Accept: 'application/vnd.github+json'
+    },
+    body: formData
+  });
+
+  if (!response.ok) {
+    const errorBody = await safeParseJson(response);
+    throw new Error(errorBody?.message || `Failed to upload screenshot (status ${response.status})`);
+  }
+
+  return await response.json();
+}
+
+async function patchIssueBody(owner, repo, issueNumber, body, token) {
+  const response = await fetch(`https://api.github.com/repos/${owner}/${repo}/issues/${issueNumber}`, {
+    method: 'PATCH',
+    headers: {
+      Authorization: `token ${token}`,
+      Accept: 'application/vnd.github+json',
+      'Content-Type': 'application/json',
+      'X-GitHub-Api-Version': '2022-11-28'
+    },
+    body: JSON.stringify({ body })
+  });
+
+  if (!response.ok) {
+    const errorBody = await safeParseJson(response);
+    throw new Error(errorBody?.message || `Failed to update issue body (status ${response.status})`);
+  }
+}
+
+async function dataUrlToBlob(dataUrl) {
+  if (typeof dataUrl !== 'string' || !dataUrl.startsWith('data:')) {
+    return null;
+  }
+  try {
+    const response = await fetch(dataUrl);
+    return await response.blob();
+  } catch (error) {
+    console.warn('Unable to convert data URL to blob', error);
+    return null;
+  }
 }
 
 async function safeParseJson(response) {

@@ -41,7 +41,7 @@ const INLINE_EVENT_PATTERN = /\s+on\w+\s*=\s*["'][^"']*["']/gi;
  * @param {Object} userInput - User-provided information (title, description)
  * @returns {Object} - { title, body } formatted for GitHub
  */
-function buildSanitizedIssue(context = {}, userInput = {}, extras = {}) {
+function buildSanitizedIssue(context = {}, userInput = {}) {
   const sections = [];
   
   // Build each section
@@ -63,13 +63,6 @@ function buildSanitizedIssue(context = {}, userInput = {}, extras = {}) {
   if (consoleLogs) sections.push(consoleLogs);
   if (networkSample) sections.push(networkSample);
   if (domSnippet) sections.push(domSnippet);
-  
-  const attachments = [];
-  if (extras?.screenshotDataUrl) {
-    attachments.push(`![Selected Element Screenshot](${extras.screenshotDataUrl})`);
-  }
-
-  // Join sections with double newline
   let body = sections.join('\n\n');
   
   // Apply overall size limit
