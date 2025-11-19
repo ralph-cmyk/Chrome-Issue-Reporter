@@ -56,7 +56,8 @@ jobs:
           wrangler r2 object put \
             ${{ secrets.R2_BUCKET_NAME }}/extensions/chrome-issue-reporter-v${{ steps.get-version.outputs.version }}.zip \
             --file=chrome-issue-reporter-v${{ steps.get-version.outputs.version }}.zip \
-            --content-type=application/zip
+            --content-type=application/zip \
+            --remote
         env:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CF_API_TOKEN }}
           CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CF_ACCOUNT_ID }}
@@ -67,7 +68,8 @@ jobs:
           wrangler r2 object put \
             ${{ secrets.R2_BUCKET_NAME }}/update.xml \
             --file=update.xml \
-            --content-type=application/xml
+            --content-type=application/xml \
+            --remote
         env:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CF_API_TOKEN }}
           CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CF_ACCOUNT_ID }}
