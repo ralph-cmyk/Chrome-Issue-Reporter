@@ -8,11 +8,12 @@
 const fs = require('fs');
 const path = require('path');
 
-const [extensionId, version, downloadUrl] = process.argv.slice(2);
+const args = process.argv.slice(2);
+const [extensionId, version, downloadUrl, outputPathArg] = args;
 
 if (!extensionId || !version || !downloadUrl) {
-  console.error('Usage: node scripts/update-manifest.js <extension-id> <version> <download-url>');
-  console.error('Example: node scripts/update-manifest.js abcdefghijklmnopqrstuvwxyz123456 21.0.0 https://example.com/extensions/extension-v21.0.0.zip');
+  console.error('Usage: node scripts/update-manifest.js <extension-id> <version> <download-url> [output-path]');
+  console.error('Example: node scripts/update-manifest.js abcdefghijklmnopqrstuvwxyz123456 21.0.0 https://example.com/extensions/extension-v21.0.0.zip update.xml');
   process.exit(1);
 }
 
@@ -26,10 +27,8 @@ const updateXml = `<?xml version='1.0' encoding='UTF-8'?>
 console.log('Generated update.xml:');
 console.log(updateXml);
 
-// Optionally write to file (4th argument, since 0=node, 1=script, 2-4=args)
-const outputPath = process.argv[4] || path.join(__dirname, '..', 'update.xml');
-if (outputPath) {
-  fs.writeFileSync(outputPath, updateXml, 'utf8');
-  console.log(`\nWritten to: ${outputPath}`);
-}
+// Write to file (4th argument is optional output path)
+const outputPath = outputPathArg || path.join(__dirname, '..', 'update.xml');
+fs.writeFileSync(outputPath, updateXml, 'utf8');
+console.log(`\nWritten to: ${outputPath}`);
 
