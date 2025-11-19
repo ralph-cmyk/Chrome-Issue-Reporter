@@ -48,32 +48,42 @@ jobs:
           EXTENSION_ID: ${{ secrets.CHROME_EXTENSION_ID }}
           UPDATE_BASE_URL: ${{ secrets.UPDATE_BASE_URL }}
 
-      - name: Install Wrangler CLI
-        run: npm install -g wrangler
+      - name: Install AWS CLI (for S3-compatible R2 API)
+        run: |
+          curl "https://awscli.amazonaws.com/awscli-exe-linux-x86_64.zip" -o "awscliv2.zip"
+          unzip -q awscliv2.zip
+          sudo ./aws/install
+
+      - name: Configure AWS CLI for R2
+        run: |
+          aws configure set aws_access_key_id ${{ secrets.R2_ACCESS_KEY_ID || secrets.CF_API_TOKEN }}
+          aws configure set aws_secret_access_key ${{ secrets.R2_SECRET_ACCESS_KEY || secrets.CF_API_TOKEN }}
+          aws configure set region auto
+        env:
+          AWS_ACCESS_KEY_ID: ${{ secrets.R2_ACCESS_KEY_ID }}
+          AWS_SECRET_ACCESS_KEY: ${{ secrets.R2_SECRET_ACCESS_KEY }}
 
       - name: Upload extension ZIP to Cloudflare R2
         run: |
-          wrangler r2 object put \
-            ${{ secrets.R2_BUCKET_NAME }}/extensions/chrome-issue-reporter-v${{ steps.get-version.outputs.version }}.zip \
-            --file=chrome-issue-reporter-v${{ steps.get-version.outputs.version }}.zip \
-            --content-type=application/zip \
-            --remote
+          aws s3 cp \
+            chrome-issue-reporter-v${{ steps.get-version.outputs.version }}.zip \
+            s3://${{ secrets.R2_BUCKET_NAME }}/extensions/chrome-issue-reporter-v${{ steps.get-version.outputs.version }}.zip \
+            --endpoint-url https://${{ secrets.CF_ACCOUNT_ID }}.r2.cloudflarestorage.com \
+            --content-type application/zip
         env:
-          CLOUDFLARE_API_TOKEN: ${{ secrets.CF_API_TOKEN }}
-          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CF_ACCOUNT_ID }}
-          R2_BUCKET_NAME: ${{ secrets.R2_BUCKET_NAME }}
+          AWS_ACCESS_KEY_ID: ${{ secrets.R2_ACCESS_KEY_ID }}
+          AWS_SECRET_ACCESS_KEY: ${{ secrets.R2_SECRET_ACCESS_KEY }}
 
       - name: Upload update.xml to Cloudflare R2
         run: |
-          wrangler r2 object put \
-            ${{ secrets.R2_BUCKET_NAME }}/update.xml \
-            --file=update.xml \
-            --content-type=application/xml \
-            --remote
+          aws s3 cp \
+            update.xml \
+            s3://${{ secrets.R2_BUCKET_NAME }}/update.xml \
+            --endpoint-url https://${{ secrets.CF_ACCOUNT_ID }}.r2.cloudflarestorage.com \
+            --content-type application/xml
         env:
-          CLOUDFLARE_API_TOKEN: ${{ secrets.CF_API_TOKEN }}
-          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CF_ACCOUNT_ID }}
-          R2_BUCKET_NAME: ${{ secrets.R2_BUCKET_NAME }}
+          AWS_ACCESS_KEY_ID: ${{ secrets.R2_ACCESS_KEY_ID }}
+          AWS_SECRET_ACCESS_KEY: ${{ secrets.R2_SECRET_ACCESS_KEY }}
 
       - name: Deploy to Cloudflare Pages (Alternative)
         if: false # Set to true if using Pages instead of R2

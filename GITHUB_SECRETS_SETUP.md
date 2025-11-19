@@ -37,6 +37,16 @@ Click **"New repository secret"** for each of these (except CHROME_EXTENSION_ID 
 - **Value:** `chrome-issue-reporter-screenshots`
 - **Description:** R2 bucket name for storing extension packages and update.xml
 
+### 6. R2_ACCESS_KEY_ID
+- **Name:** `R2_ACCESS_KEY_ID`
+- **Value:** `38142b72ea8ec8343fe80526339e6f9c`
+- **Description:** R2 Access Key ID for S3-compatible API uploads
+
+### 7. R2_SECRET_ACCESS_KEY
+- **Name:** `R2_SECRET_ACCESS_KEY`
+- **Value:** `f34b352a18e31839b9e66cb639fa3234201000085d17f513328e2ca9ee7b5784`
+- **Description:** R2 Secret Access Key for S3-compatible API uploads
+
 ## Quick Setup Steps
 
 1. **Get Extension ID:**
