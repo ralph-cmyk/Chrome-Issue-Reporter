@@ -918,6 +918,11 @@ async function openIssueModal(payload = {}, fromLiveSelect = false) {
   modalState.lastIssue = payload.lastIssue || null;
   modalState.projectFieldId = modalState.preferences.statusFieldId || null;
 
+  // Show screenshot error if present
+  if (payload.screenshotError) {
+    setModalStatus(`Screenshot capture failed: ${payload.screenshotError}. The issue will be created without a screenshot.`, 'error');
+  }
+
   setModalStatus('');
   setSubmittingState(false);
 
@@ -954,7 +959,14 @@ async function openIssueModal(payload = {}, fromLiveSelect = false) {
   }
 
   if (fromLiveSelect) {
-    showToast('Element captured. Describe the problem and submit when ready.');
+    const hasScreenshot = Boolean(modalState.screenshotDataUrl);
+    showToast(
+      hasScreenshot 
+        ? 'Element and screenshot captured. Describe the problem and submit when ready.'
+        : 'Element captured. Describe the problem and submit when ready.'
+    );
+  } else if (modalState.screenshotDataUrl) {
+    showToast('Screenshot captured. Describe the problem and submit when ready.');
   }
 }
 
@@ -1158,14 +1170,37 @@ async function handleModalSubmit(event) {
 
     if (response?.success) {
       const issue = response.issue;
+      let toastMessage = `Issue #${issue.number} created successfully!`;
+      
+      if (modalState.screenshotDataUrl && !response.screenshotAttached) {
+        const errorMsg = response.issue?.screenshotUploadError || 'Screenshot upload failed';
+        toastMessage += ` Note: ${errorMsg}`;
+      }
+      
       closeIssueModal();
-      showToast(`Issue #${issue.number} created`, 'success', { href: issue.html_url, label: 'Open issue' });
+      showToast(toastMessage, 'success', { href: issue.html_url, label: 'Open issue' });
     } else {
       throw new Error(response?.error || 'Issue creation failed');
     }
   } catch (error) {
     console.error('Issue creation error', error);
-    setModalStatus(error.message || 'Failed to create issue.', 'error');
+    const errorMessage = error.message || 'Failed to create issue.';
+    
+    // Provide user-friendly error messages
+    let userMessage = errorMessage;
+    if (errorMessage.includes('Authentication')) {
+      userMessage = 'Authentication failed. Please sign in again from the extension options.';
+    } else if (errorMessage.includes('Repository')) {
+      userMessage = 'Repository configuration is missing. Please configure your repository in extension options.';
+    } else if (errorMessage.includes('screenshot') || errorMessage.includes('Screenshot')) {
+      userMessage = `${errorMessage} The issue will be created without a screenshot.`;
+    } else if (errorMessage.includes('rate limit')) {
+      userMessage = 'GitHub rate limit exceeded. Please wait a few minutes and try again.';
+    } else if (errorMessage.includes('network') || errorMessage.includes('fetch')) {
+      userMessage = 'Network error. Please check your internet connection and try again.';
+    }
+    
+    setModalStatus(userMessage, 'error');
     setSubmittingState(false);
   }
 }
@@ -1276,17 +1311,47 @@ function updateScreenshotPreview(dataUrl, context) {
     return;
   }
 
+  const titleContainer = document.createElement('div');
+  titleContainer.style.display = 'flex';
+  titleContainer.style.alignItems = 'center';
+  titleContainer.style.gap = '8px';
+  titleContainer.style.marginBottom = '8px';
+
   const title = document.createElement('span');
-  title.textContent = 'Screenshot';
+  title.textContent = '📸 Screenshot captured';
   title.style.fontSize = '12px';
   title.style.fontWeight = '600';
   title.style.color = '#475569';
 
+  const badge = document.createElement('span');
+  badge.textContent = '✓';
+  badge.style.background = '#10b981';
+  badge.style.color = 'white';
+  badge.style.borderRadius = '50%';
+  badge.style.width = '18px';
+  badge.style.height = '18px';
+  badge.style.display = 'inline-flex';
+  badge.style.alignItems = 'center';
+  badge.style.justifyContent = 'center';
+  badge.style.fontSize = '10px';
+  badge.style.fontWeight = 'bold';
+
+  titleContainer.appendChild(badge);
+  titleContainer.appendChild(title);
+
   const image = document.createElement('img');
   image.src = dataUrl;
-  image.alt = context?.elementDescription ? `Screenshot of ${context.elementDescription}` : 'Screenshot of selected element';
+  image.alt = context?.elementDescription ? `Screenshot of ${context.elementDescription}` : 'Screenshot';
+  image.style.cursor = 'pointer';
+  image.title = 'Click to view full size';
+  image.addEventListener('click', () => {
+    const newWindow = window.open();
+    if (newWindow) {
+      newWindow.document.write(`<img src="${dataUrl}" style="max-width: 100%; height: auto;" />`);
+    }
+  });
 
-  modalElements.screenshotContainer.appendChild(title);
+  modalElements.screenshotContainer.appendChild(titleContainer);
   modalElements.screenshotContainer.appendChild(image);
 }
 

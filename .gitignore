@@ -23,3 +23,7 @@ Thumbs.db
 # Extension key (keep private)
 key.pem
 *.crx
+
+# Credentials (keep private)
+YOUR_CLOUDFLARE_CREDENTIALS.md
+YOUR_CLOUDFLARE_SETUP.md

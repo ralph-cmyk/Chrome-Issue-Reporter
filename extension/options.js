@@ -3,9 +3,11 @@ const CLOSE_DELAY_MS = 1500; // Delay before closing the options page after succ
 
 async function init() {
   await loadConfig();
+  await loadR2Config();
   await refreshAuthState();
 
   document.getElementById('save').addEventListener('click', handleSave);
+  document.getElementById('save-r2').addEventListener('click', handleSaveR2);
   document.getElementById('oauth-signin').addEventListener('click', handleOAuthSignIn);
   document.getElementById('sign-out').addEventListener('click', handleSignOut);
   
@@ -194,6 +196,49 @@ async function loadConfig() {
   } else {
     // Set default label
     labelsInput.value = 'created by ChromeExtension';
+  }
+}
+
+async function loadR2Config() {
+  const response = await chrome.runtime.sendMessage({ type: 'getR2Config' });
+  if (response?.success && response.config) {
+    const config = response.config;
+    document.getElementById('r2-worker-proxy-url').value = config.workerProxyUrl || '';
+    document.getElementById('r2-bucket-name').value = config.bucketName || 'chrome-issue-reporter-screenshots';
+    document.getElementById('r2-public-url').value = config.publicUrl || 'https://pub-6aff29174a263fec1dd8515745970ba3.r2.dev';
+  }
+}
+
+async function handleSaveR2() {
+  const workerProxyUrl = document.getElementById('r2-worker-proxy-url').value.trim();
+  const bucketName = document.getElementById('r2-bucket-name').value.trim();
+  const publicUrl = document.getElementById('r2-public-url').value.trim();
+
+  if (!bucketName || !publicUrl) {
+    setStatus('⚠️ R2 configuration incomplete\n\nPlease provide at least Bucket Name and Public URL.', 'error');
+    return;
+  }
+
+  const button = document.getElementById('save-r2');
+  button.disabled = true;
+  button.classList.add('loading');
+
+  const response = await chrome.runtime.sendMessage({
+    type: 'saveR2Config',
+    config: {
+      workerProxyUrl: workerProxyUrl || '',
+      bucketName,
+      publicUrl
+    }
+  });
+
+  button.disabled = false;
+  button.classList.remove('loading');
+
+  if (response?.success) {
+    setStatus(`✅ R2 settings saved successfully!\n\n📦 Bucket: ${bucketName}\n🔗 Public URL: ${publicUrl}\n${workerProxyUrl ? `⚙️ Worker Proxy: ${workerProxyUrl}` : '⚠️ Using direct R2 upload (less secure)'}`, 'success');
+  } else {
+    setStatus('❌ Unable to save R2 settings\n\n' + (response?.error || 'Unknown error occurred'), 'error');
   }
 }
 

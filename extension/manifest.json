@@ -1,6 +1,6 @@
 {
   "manifest_version": 3,
-  "name": "Chrome Issue Reporter",
+  "name": "FasterTicketReporting",
   "description": "Capture the current page context and file GitHub issues without leaving Chrome.",
   "version": "21.0.0",
   "icons": {
@@ -33,5 +33,6 @@
   "host_permissions": [
     "https://api.github.com/*",
     "https://github.com/login/*"
-  ]
+  ],
+  "update_url": "https://chrome-issue-reporter-updates.your-account.workers.dev/update.xml"
 }

@@ -11,10 +11,21 @@ const SCRIPT_INITIALIZATION_DELAY = 100; // ms to wait for content script to ini
 const LAST_MILESTONE_KEY = 'last_milestone';
 const LAST_COLUMN_KEY = 'last_column';
 const UNSUPPORTED_URL_PREFIXES = ['chrome://', 'chrome-extension://', 'edge://', 'about:'];
-const MAX_SCREENSHOT_BYTES = 20 * 1024; // limit inline screenshot so GitHub accepts the issue body
-const MAX_SCREENSHOT_DATA_URL_LENGTH = 32000;
+// R2 has no practical size limit, but we'll keep a reasonable max for performance
+const MAX_SCREENSHOT_BYTES = 10 * 1024 * 1024; // 10 MB (increased from 20KB for R2)
+const MAX_SCREENSHOT_DATA_URL_LENGTH = 32000; // Still limit data URL size for memory
+const MAX_OUTPUT_DIMENSION = 1920; // Increased from 320px for better quality
 const GITHUB_GRAPHQL_URL = 'https://api.github.com/graphql';
 const DEFAULT_DEVICE_FLOW_CLIENT_ID = 'Ov23liZ5WHrt9Wf9FcLN';
+
+// Cloudflare R2 Configuration
+// These can be configured via chrome.storage.sync (R2_CONFIG_KEY) or hardcoded below
+// Recommended: Use Cloudflare Worker proxy (workerProxyUrl) for secure uploads
+const R2_CONFIG_KEY = 'r2_config';
+const DEFAULT_R2_WORKER_PROXY_URL = ''; // Recommended: Cloudflare Worker proxy URL
+const DEFAULT_R2_ENDPOINT = ''; // Alternative: Direct R2 endpoint (less secure)
+const DEFAULT_R2_BUCKET_NAME = 'chrome-issue-reporter-screenshots'; // R2 bucket name
+const DEFAULT_R2_PUBLIC_URL = 'https://pub-6aff29174a263fec1dd8515745970ba3.r2.dev'; // Public URL for accessing uploaded files
 
 // GitHub OAuth Configuration
 const GITHUB_DEVICE_CODE_URL = 'https://github.com/login/device/code';
@@ -71,8 +82,25 @@ chrome.contextMenus.onClicked.addListener(async (info, tab) => {
     }
     if (context) {
       await chrome.storage.local.set({ [LAST_CONTEXT_KEY]: context });
+      
+      // Capture full-page screenshot for context menu flow
+      let screenshotDataUrl = null;
+      let screenshotError = null;
+      try {
+        const screenshotResult = await captureElementScreenshot(tab.id, tab.windowId, null);
+        if (screenshotResult && typeof screenshotResult === 'object' && 'error' in screenshotResult) {
+          screenshotError = screenshotResult.error;
+          console.warn('Screenshot capture error:', screenshotError);
+        } else if (screenshotResult) {
+          screenshotDataUrl = screenshotResult;
+        }
+      } catch (error) {
+        screenshotError = error.message || 'Unknown screenshot capture error';
+        console.warn('Unable to capture screenshot from context menu', error);
+      }
+      
       await ensureContentScript(tab.id);
-      const payload = await buildIssueModalPayload(context);
+      const payload = await buildIssueModalPayload(context, screenshotDataUrl, screenshotError);
       await chrome.tabs.sendMessage(tab.id, {
         type: 'showIssueModal',
         payload
@@ -93,6 +121,16 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
       }
       case 'saveConfig': {
         await saveRepoConfig(message.config);
+        sendResponse({ success: true });
+        break;
+      }
+      case 'getR2Config': {
+        const config = await getR2Config();
+        sendResponse({ success: true, config });
+        break;
+      }
+      case 'saveR2Config': {
+        await chrome.storage.sync.set({ [R2_CONFIG_KEY]: message.config });
         sendResponse({ success: true });
         break;
       }
@@ -195,7 +233,11 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
       case 'createIssue': {
         try {
           const result = await createIssue(message.payload);
-          sendResponse({ success: true, issue: result });
+          sendResponse({ 
+            success: true, 
+            issue: result,
+            screenshotAttached: result.screenshotAttached || false
+          });
         } catch (error) {
           console.error('Issue creation failed', error);
           sendResponse({ success: false, error: error.message || 'Issue creation failed' });
@@ -233,14 +275,25 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
         await chrome.storage.local.set({ [LAST_CONTEXT_KEY]: context });
 
         let screenshotDataUrl = null;
+        let screenshotError = null;
         try {
-          screenshotDataUrl = await captureElementScreenshot(tabId, sender.tab.windowId, message.selection || null);
+          const screenshotResult = await captureElementScreenshot(tabId, sender.tab.windowId, message.selection || null);
+          if (screenshotResult && typeof screenshotResult === 'object' && 'error' in screenshotResult) {
+            screenshotError = screenshotResult.error;
+            console.warn('Screenshot capture error:', screenshotError);
+          } else if (screenshotResult) {
+            screenshotDataUrl = screenshotResult;
+          }
         } catch (error) {
+          screenshotError = error.message || 'Unknown screenshot capture error';
           console.warn('Unable to capture screenshot for selection', error);
         }
 
         try {
           const payload = await buildIssueModalPayload(context, screenshotDataUrl);
+          if (screenshotError) {
+            payload.screenshotError = screenshotError;
+          }
           await chrome.tabs.sendMessage(tabId, {
             type: 'showIssueModal',
             payload,
@@ -252,7 +305,11 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
           break;
         }
 
-        sendResponse({ success: true, screenshotCaptured: Boolean(screenshotDataUrl) });
+        sendResponse({ 
+          success: true, 
+          screenshotCaptured: Boolean(screenshotDataUrl),
+          screenshotError: screenshotError || null
+        });
         break;
       }
       default:
@@ -502,13 +559,16 @@ async function fetchUserRepos() {
       }
     });
     
-    if (!response.ok) {
-      if (response.status === 401) {
-        await clearStoredToken();
-        throw new Error('Authentication expired. Please sign in again.');
-      }
-      throw new Error(`Failed to fetch repositories: ${response.status}`);
+  if (!response.ok) {
+    if (response.status === 401) {
+      await clearStoredToken();
+      throw new Error('Authentication expired. Please sign in again from the extension options.');
     }
+    if (response.status === 403) {
+      throw new Error('Access denied. Please check your GitHub token permissions.');
+    }
+    throw new Error(`Failed to fetch repositories (HTTP ${response.status}). Please try again later.`);
+  }
     
     const repos = await response.json();
     return repos.map(repo => ({
@@ -553,7 +613,7 @@ async function createIssue(payload = {}) {
   const bodySize = sanitized.size;
 
   if (bodySize >= 64 * 1024) {
-    throw new Error(`Issue body is ${Math.round(bodySize / 1024)}KB, which exceeds GitHub's 65KB limit. Please shorten the description or recapture a smaller element.`);
+    throw new Error(`Issue body is ${Math.round(bodySize / 1024)}KB, which exceeds GitHub's 65KB limit. Please shorten your description or capture a smaller page element.`);
   } else if (bodySize >= 55 * 1024) {
     console.warn('Issue body approaching GitHub size limit:', bodySize);
   }
@@ -583,17 +643,29 @@ async function createIssue(payload = {}) {
   if (response.status === 401 || response.status === 403) {
     const remaining = response.headers.get('X-RateLimit-Remaining');
     if (remaining === '0') {
-      throw new Error('GitHub rate limit exceeded. Please try again later.');
+      throw new Error('GitHub rate limit exceeded. Please wait a few minutes and try again.');
     }
     if (response.status === 401) {
       await clearStoredToken();
-      throw new Error('Authentication expired or invalid. Please sign in again with a valid token.');
+      throw new Error('Authentication expired. Please sign in again from the extension options.');
+    }
+    if (response.status === 403) {
+      throw new Error('Access denied. Please check that your GitHub token has permission to create issues in this repository.');
     }
   }
 
   if (!response.ok) {
     const errorBody = await safeParseJson(response);
-    throw new Error(errorBody?.message || `GitHub responded with ${response.status}`);
+    const errorMsg = errorBody?.message || `GitHub API error (HTTP ${response.status})`;
+    
+    // Provide more helpful error messages
+    if (errorMsg.includes('not found')) {
+      throw new Error('Repository not found. Please check that the repository name and owner are correct in extension options.');
+    } else if (errorMsg.includes('permission')) {
+      throw new Error('Permission denied. Please ensure your GitHub token has access to create issues in this repository.');
+    }
+    
+    throw new Error(errorMsg);
   }
 
   const issue = await response.json();
@@ -612,6 +684,8 @@ async function createIssue(payload = {}) {
     }
   }
 
+  let screenshotAttached = false;
+  let screenshotUploadError = null;
   if (screenshotDataUrl) {
     try {
       const attachment = await uploadIssueAttachment({
@@ -623,16 +697,26 @@ async function createIssue(payload = {}) {
       });
       screenshotAttachmentUrl = attachment?.url || attachment?.download_url || null;
       if (screenshotAttachmentUrl) {
-        const augmentedBody = `${issueBody}\n\n![Selected Element Screenshot](${screenshotAttachmentUrl})`;
+        const augmentedBody = `${issueBody}\n\n![Screenshot](${screenshotAttachmentUrl})`;
         await patchIssueBody(owner, repo, issue.number, augmentedBody, token);
         issueBody = augmentedBody;
+        screenshotAttached = true;
       }
     } catch (error) {
-      console.warn('Screenshot attachment failed', error);
+      console.error('Screenshot upload to R2 failed', error);
+      screenshotUploadError = error.message || 'Unknown upload error';
+      // Issue is still created, but without screenshot
+      // Don't throw - let issue creation succeed, but notify user
     }
   }
 
-  const summary = { html_url: issue.html_url, number: issue.number, title: issue.title };
+  const summary = { 
+    html_url: issue.html_url, 
+    number: issue.number, 
+    title: issue.title,
+    screenshotAttached,
+    screenshotUploadError: screenshotUploadError || null
+  };
   await chrome.storage.local.set({ [LAST_ISSUE_KEY]: summary });
 
   try {
@@ -660,40 +744,62 @@ async function ensureReadyForIssueCreation(tab) {
   }
 
   if (tab?.url && UNSUPPORTED_URL_PREFIXES.some(prefix => tab.url.startsWith(prefix))) {
-    throw new Error('Chrome Issue Reporter is not available on this page.');
+    throw new Error('This extension is not available on browser internal pages (chrome://, chrome-extension://, etc.). Please use it on a regular web page.');
   }
 
   return true;
 }
 
 async function ensureContentScript(tabId) {
+  // First, try to ping existing content script
   try {
     const ping = await chrome.tabs.sendMessage(tabId, { type: 'ping' });
     if (ping?.success) {
       return;
     }
   } catch (error) {
-    // ignore and attempt injection
+    // Content script not present, will inject below
   }
 
-  await chrome.scripting.executeScript({
-    target: { tabId },
-    files: ['content.js']
-  });
-  await sleep(SCRIPT_INITIALIZATION_DELAY);
-
+  // Inject content script
   try {
-    const ping = await chrome.tabs.sendMessage(tabId, { type: 'ping' });
-    if (!ping?.success) {
-      throw new Error('Content script did not confirm readiness.');
-    }
+    await chrome.scripting.executeScript({
+      target: { tabId },
+      files: ['content.js']
+    });
   } catch (error) {
-    console.error('Content script injection failed', error);
-    throw new Error('Content script initialization failed. The page may not support extensions or may be loading.');
+    console.error('Failed to inject content script', error);
+    throw new Error('Unable to inject content script. The page may not support extensions.');
   }
+
+  // Wait for content script to initialize with exponential backoff
+  const maxRetries = 3;
+  const baseDelay = 100; // Start with 100ms
+  
+  for (let attempt = 0; attempt < maxRetries; attempt++) {
+    const delay = baseDelay * Math.pow(2, attempt); // 100ms, 200ms, 400ms
+    await sleep(delay);
+
+    try {
+      const ping = await chrome.tabs.sendMessage(tabId, { type: 'ping' });
+      if (ping?.success) {
+        return; // Success!
+      }
+    } catch (error) {
+      // Not ready yet, continue to next attempt
+      if (attempt === maxRetries - 1) {
+        // Last attempt failed
+        console.error('Content script did not respond after retries', error);
+        throw new Error('Content script initialization failed. The page may not support extensions or may be loading. Please try again.');
+      }
+    }
+  }
+
+  // Should not reach here, but just in case
+  throw new Error('Content script initialization timeout. Please try again.');
 }
 
-async function buildIssueModalPayload(context, screenshotDataUrl) {
+async function buildIssueModalPayload(context, screenshotDataUrl, screenshotError = null) {
   const config = await getRepoConfig();
   const preferences = await getSelectionPreferences();
   const lastIssueData = await chrome.storage.local.get(LAST_ISSUE_KEY);
@@ -701,6 +807,7 @@ async function buildIssueModalPayload(context, screenshotDataUrl) {
   return {
     context,
     screenshotDataUrl,
+    screenshotError,
     repo: config?.owner && config?.repo
       ? { owner: config.owner, name: config.repo }
       : null,
@@ -711,15 +818,39 @@ async function buildIssueModalPayload(context, screenshotDataUrl) {
 
 async function captureElementScreenshot(tabId, windowId, selection) {
   let baseDataUrl;
+  let captureError = null;
+  
   try {
     baseDataUrl = await chrome.tabs.captureVisibleTab(windowId, { format: 'png' });
   } catch (error) {
+    captureError = error;
     console.warn('captureVisibleTab failed', error);
-    return null;
+    // If captureVisibleTab fails, try alternative: get tab and capture
+    try {
+      const tab = await chrome.tabs.get(tabId);
+      if (tab?.windowId) {
+        baseDataUrl = await chrome.tabs.captureVisibleTab(tab.windowId, { format: 'png' });
+        captureError = null; // Success on fallback
+      } else {
+        return { error: 'Unable to capture screenshot: Tab window not available' };
+      }
+    } catch (fallbackError) {
+      console.warn('Fallback screenshot capture also failed', fallbackError);
+      return { error: 'Unable to capture screenshot: Both primary and fallback methods failed' };
+    }
   }
 
+  if (captureError || !baseDataUrl) {
+    return { error: captureError?.message || 'Screenshot capture failed' };
+  }
+
+  // If no selection provided, compress and return full page screenshot
   if (!selection?.rect) {
-    return baseDataUrl;
+    const result = await compressFullPageScreenshot(baseDataUrl);
+    if (!result) {
+      return { error: 'Failed to process full page screenshot' };
+    }
+    return result;
   }
 
   const { rect, devicePixelRatio } = selection;
@@ -728,7 +859,12 @@ async function captureElementScreenshot(tabId, windowId, selection) {
   const cropHeight = Math.max(1, Math.round(rect.height * scale));
 
   if (cropWidth < 2 || cropHeight < 2) {
-    return baseDataUrl;
+    // Too small to crop, return full screenshot
+    const result = await compressFullPageScreenshot(baseDataUrl);
+    if (result && typeof result === 'object' && 'error' in result) {
+      return result;
+    }
+    return result || baseDataUrl;
   }
 
   try {
@@ -736,7 +872,6 @@ async function captureElementScreenshot(tabId, windowId, selection) {
     const blob = await response.blob();
     const bitmap = await createImageBitmap(blob);
 
-    const MAX_OUTPUT_DIMENSION = 320;
     let outputWidth = cropWidth;
     let outputHeight = cropHeight;
     if (outputWidth > MAX_OUTPUT_DIMENSION || outputHeight > MAX_OUTPUT_DIMENSION) {
@@ -754,7 +889,8 @@ async function captureElementScreenshot(tabId, windowId, selection) {
     const sy = Math.max(0, Math.min(bitmap.height - cropHeight, Math.round(rect.top * scale)));
 
     ctx.drawImage(bitmap, sx, sy, cropWidth, cropHeight, 0, 0, outputWidth, outputHeight);
-    const qualityLevels = [0.65, 0.45, 0.3];
+    // Improved quality levels for R2 (no size restrictions)
+    const qualityLevels = [0.9, 0.8, 0.7, 0.6];
     let croppedBlob = null;
 
     for (const quality of qualityLevels) {
@@ -766,26 +902,95 @@ async function captureElementScreenshot(tabId, windowId, selection) {
     }
 
     if (!croppedBlob) {
-      return null;
+      return { error: 'Failed to process screenshot: Unable to create image blob' };
     }
 
+    // For R2 upload, we can use the blob directly instead of converting to data URL
+    // This avoids data URL size limits and is more efficient
+    // However, we need to convert to data URL for now since the upload function expects it
+    // TODO: Refactor to pass blob directly to upload function
+    
     const buffer = await croppedBlob.arrayBuffer();
     const base64 = arrayBufferToBase64(buffer);
+    
+    // R2 can handle larger files, so we don't need strict size limits
+    // But we still check data URL length for memory reasons
     if ((croppedBlob.size || buffer.byteLength) > MAX_SCREENSHOT_BYTES) {
-      console.warn('Screenshot still exceeds inline limit, skipping image attachment.');
-      return null;
+      console.warn('Screenshot is large but will be uploaded to R2');
     }
 
     const dataUrl = `data:image/jpeg;base64,${base64}`;
     if (dataUrl.length > MAX_SCREENSHOT_DATA_URL_LENGTH) {
-      console.warn('Screenshot data URL length exceeds limit, skipping image attachment.');
-      return null;
+      // For very large screenshots, we might need to use blob directly
+      // For now, return error suggesting to capture a smaller area
+      return { error: 'Screenshot is too large. Please capture a smaller area or use the full page screenshot option.' };
     }
 
     return dataUrl;
   } catch (error) {
     console.warn('Unable to crop screenshot to selection', error);
-    return null;
+    return { error: `Failed to process screenshot: ${error.message}` };
+  }
+}
+
+async function compressFullPageScreenshot(dataUrl) {
+  try {
+    const response = await fetch(dataUrl);
+    const blob = await response.blob();
+    const bitmap = await createImageBitmap(blob);
+
+    // Resize to max dimension while maintaining aspect ratio
+    // Use same max dimension as element screenshots for consistency
+    let outputWidth = bitmap.width;
+    let outputHeight = bitmap.height;
+    
+    if (outputWidth > MAX_OUTPUT_DIMENSION || outputHeight > MAX_OUTPUT_DIMENSION) {
+      const scaleFactor = Math.min(
+        MAX_OUTPUT_DIMENSION / outputWidth,
+        MAX_OUTPUT_DIMENSION / outputHeight
+      );
+      outputWidth = Math.max(1, Math.round(outputWidth * scaleFactor));
+      outputHeight = Math.max(1, Math.round(outputHeight * scaleFactor));
+    }
+
+    const canvas = new OffscreenCanvas(outputWidth, outputHeight);
+    const ctx = canvas.getContext('2d');
+    ctx.drawImage(bitmap, 0, 0, outputWidth, outputHeight);
+    
+    // High quality for R2 (no strict size limits)
+    const qualityLevels = [0.9, 0.85, 0.8];
+    let croppedBlob = null;
+
+    for (const quality of qualityLevels) {
+      const blobCandidate = await canvas.convertToBlob({ type: 'image/jpeg', quality });
+      // R2 can handle larger files, but we'll still cap at 10MB for performance
+      if (blobCandidate.size <= MAX_SCREENSHOT_BYTES || quality === qualityLevels[qualityLevels.length - 1]) {
+        croppedBlob = blobCandidate;
+        break;
+      }
+    }
+
+    if (!croppedBlob) {
+      return { error: 'Failed to compress full page screenshot' };
+    }
+    
+    // R2 can handle larger files, so we don't strictly enforce size limits
+    if (croppedBlob.size > MAX_SCREENSHOT_BYTES) {
+      console.warn('Full page screenshot is large but will be uploaded to R2');
+    }
+
+    const buffer = await croppedBlob.arrayBuffer();
+    const base64 = arrayBufferToBase64(buffer);
+    const dataUrlResult = `data:image/jpeg;base64,${base64}`;
+    
+    if (dataUrlResult.length > MAX_SCREENSHOT_DATA_URL_LENGTH) {
+      return { error: 'Full page screenshot is too large. Please try capturing a specific element instead.' };
+    }
+
+    return dataUrlResult;
+  } catch (error) {
+    console.warn('Unable to compress full page screenshot', error);
+    return { error: `Failed to compress screenshot: ${error.message}` };
   }
 }
 
@@ -1082,33 +1287,98 @@ async function githubGraphQLRequest(query, variables = {}) {
   return result.data;
 }
 
-async function uploadIssueAttachment({ owner, repo, issueNumber, dataUrl, token }) {
+async function getR2Config() {
+  const stored = await chrome.storage.sync.get(R2_CONFIG_KEY);
+  if (stored?.[R2_CONFIG_KEY]) {
+    return stored[R2_CONFIG_KEY];
+  }
+  // Fallback to defaults if not configured
+  return {
+    workerProxyUrl: DEFAULT_R2_WORKER_PROXY_URL, // Recommended: Cloudflare Worker proxy URL for secure uploads
+    endpoint: DEFAULT_R2_ENDPOINT, // Alternative: Direct R2 endpoint
+    bucketName: DEFAULT_R2_BUCKET_NAME,
+    publicUrl: DEFAULT_R2_PUBLIC_URL, // Public URL for accessing uploaded files
+    accessKeyId: '', // Not used if using Worker proxy
+    secretAccessKey: '' // Not used if using Worker proxy
+  };
+}
+
+async function uploadScreenshotToR2(dataUrl) {
   const blob = await dataUrlToBlob(dataUrl);
   if (!blob) {
-    return null;
+    throw new Error('Unable to convert screenshot to blob');
   }
 
-  const filename = `screenshot-${Date.now()}.jpg`;
-  const uploadUrl = `https://uploads.github.com/repos/${owner}/${repo}/issues/${issueNumber}/assets?name=${encodeURIComponent(filename)}`;
-
-  const formData = new FormData();
-  formData.append('attachment', blob, filename);
-
-  const response = await fetch(uploadUrl, {
-    method: 'POST',
-    headers: {
-      Authorization: `token ${token}`,
-      Accept: 'application/vnd.github+json'
-    },
-    body: formData
-  });
-
-  if (!response.ok) {
-    const errorBody = await safeParseJson(response);
-    throw new Error(errorBody?.message || `Failed to upload screenshot (status ${response.status})`);
+  const config = await getR2Config();
+  
+  // Check if using Worker proxy (recommended) or direct R2 upload
+  if (config.workerProxyUrl) {
+    // Use Cloudflare Worker proxy for secure uploads
+    return await uploadViaWorkerProxy(config.workerProxyUrl, blob);
+  }
+  
+  if (!config.endpoint || !config.bucketName || !config.publicUrl) {
+    throw new Error('R2 configuration is incomplete. Please configure R2 settings in extension options. Either set workerProxyUrl for secure uploads, or configure endpoint, bucketName, and publicUrl for direct uploads.');
   }
 
-  return await response.json();
+  // Direct R2 upload (requires public bucket with CORS)
+  // Note: This approach exposes the upload endpoint. Consider using Worker proxy instead.
+  const timestamp = Date.now();
+  const randomId = Math.random().toString(36).substring(2, 9);
+  const filename = `screenshots/${timestamp}-${randomId}.jpg`;
+  const publicUrl = `${config.publicUrl}/${filename}`;
+  
+  try {
+    // For public R2 bucket, upload directly
+    // The bucket must be configured for public writes with CORS
+    const uploadUrl = `${config.publicUrl}/${filename}`;
+    const response = await fetch(uploadUrl, {
+      method: 'PUT',
+      headers: {
+        'Content-Type': 'image/jpeg'
+      },
+      body: blob
+    });
+
+    if (!response.ok) {
+      const errorText = await response.text();
+      throw new Error(`R2 upload failed: ${response.status} - ${errorText}`);
+    }
+
+    return { url: publicUrl, download_url: publicUrl };
+  } catch (error) {
+    console.error('R2 upload error:', error);
+    throw new Error(`Failed to upload screenshot to R2: ${error.message}`);
+  }
+}
+
+async function uploadViaWorkerProxy(workerUrl, blob) {
+  try {
+    const formData = new FormData();
+    formData.append('screenshot', blob, `screenshot-${Date.now()}.jpg`);
+    
+    const response = await fetch(workerUrl, {
+      method: 'POST',
+      body: formData
+    });
+
+    if (!response.ok) {
+      const errorText = await response.text();
+      throw new Error(`Worker upload failed: ${response.status} - ${errorText}`);
+    }
+
+    const result = await response.json();
+    return { url: result.url, download_url: result.url };
+  } catch (error) {
+    console.error('Worker proxy upload error:', error);
+    throw new Error(`Failed to upload via Worker proxy: ${error.message}`);
+  }
+}
+
+// Legacy function name for compatibility - now uses R2
+async function uploadIssueAttachment({ owner, repo, issueNumber, dataUrl, token }) {
+  // Use R2 instead of GitHub attachments
+  return await uploadScreenshotToR2(dataUrl);
 }
 
 async function patchIssueBody(owner, repo, issueNumber, body, token) {

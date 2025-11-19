@@ -384,6 +384,58 @@
           </button>
         </div>
       </div>
+
+      <div class="card">
+        <h2>📸 Screenshot Storage (Cloudflare R2)</h2>
+        <p class="hint" style="margin-top: 0;">
+          Configure Cloudflare R2 for storing screenshots. Recommended: Use a Worker proxy for secure uploads.
+        </p>
+
+        <label for="r2-worker-proxy-url">Worker Proxy URL (Recommended)</label>
+        <input
+          id="r2-worker-proxy-url"
+          name="r2-worker-proxy-url"
+          type="text"
+          placeholder="https://your-worker.workers.dev/upload"
+        />
+        <p class="hint">
+          Cloudflare Worker URL for secure screenshot uploads. Leave empty to use direct R2 upload.
+        </p>
+
+        <label for="r2-bucket-name">R2 Bucket Name</label>
+        <input
+          id="r2-bucket-name"
+          name="r2-bucket-name"
+          type="text"
+          placeholder="chrome-issue-reporter-screenshots"
+          value="chrome-issue-reporter-screenshots"
+        />
+
+        <label for="r2-public-url">R2 Public URL</label>
+        <input
+          id="r2-public-url"
+          name="r2-public-url"
+          type="text"
+          placeholder="https://pub-ACCOUNT_ID.r2.dev"
+          value="https://pub-6aff29174a263fec1dd8515745970ba3.r2.dev"
+        />
+        <p class="hint">
+          Public URL for accessing uploaded screenshots. Format: https://pub-ACCOUNT_ID.r2.dev
+        </p>
+
+        <div class="info-box">
+          <strong>ℹ️ Setup Instructions</strong>
+          <p style="margin: 8px 0 0 0;">
+            See <a href="https://github.com/ralph-cmyk/Chrome-Issue-Reporter/blob/main/CLOUDFLARE_SETUP.md" target="_blank" class="link">CLOUDFLARE_SETUP.md</a> for detailed setup instructions.
+          </p>
+        </div>
+
+        <div class="actions">
+          <button id="save-r2" type="button" class="primary">
+            💾 Save R2 Settings
+          </button>
+        </div>
+      </div>
       
       <div class="card">
         <div class="status" id="status"></div>
