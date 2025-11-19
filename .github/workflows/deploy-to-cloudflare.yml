@@ -51,7 +51,7 @@ jobs:
       - name: Upload extension ZIP to Cloudflare R2
         run: |
           wrangler r2 object put \
-            r2://${{ secrets.R2_BUCKET_NAME }}/extensions/chrome-issue-reporter-v${{ steps.get-version.outputs.version }}.zip \
+            ${{ secrets.R2_BUCKET_NAME }}/extensions/chrome-issue-reporter-v${{ steps.get-version.outputs.version }}.zip \
             --file=chrome-issue-reporter-v${{ steps.get-version.outputs.version }}.zip \
             --content-type=application/zip
         env:
@@ -62,7 +62,7 @@ jobs:
       - name: Upload update.xml to Cloudflare R2
         run: |
           wrangler r2 object put \
-            r2://${{ secrets.R2_BUCKET_NAME }}/update.xml \
+            ${{ secrets.R2_BUCKET_NAME }}/update.xml \
             --file=update.xml \
             --content-type=application/xml
         env:
