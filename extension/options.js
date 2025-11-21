@@ -5,6 +5,7 @@ async function init() {
   await loadConfig();
   await loadR2Config();
   await refreshAuthState();
+  loadVersionInfo();
 
   document.getElementById('save').addEventListener('click', handleSave);
   document.getElementById('save-r2').addEventListener('click', handleSaveR2);
@@ -336,5 +337,34 @@ function setStatus(message, type = 'info') {
   status.className = 'status ' + type;
   if (message) {
     status.style.display = 'block';
+  }
+}
+
+function loadVersionInfo() {
+  const manifest = chrome.runtime.getManifest();
+  const versionNumber = document.getElementById('version-number');
+  const extensionName = document.getElementById('extension-name');
+  const lastUpdated = document.getElementById('last-updated');
+  
+  if (versionNumber && manifest.version) {
+    versionNumber.textContent = manifest.version;
+  }
+  
+  if (extensionName && manifest.name) {
+    extensionName.textContent = manifest.name;
+  }
+  
+  // Display the extension's install/update date
+  // This will show when the current version was installed
+  if (lastUpdated) {
+    chrome.management.getSelf((extensionInfo) => {
+      if (extensionInfo && extensionInfo.installType) {
+        // For now, show the current date as we can't reliably get the actual update date
+        // In production, this should be updated in the manifest or build process
+        // Format: YYYY-MM-DD
+        const updateDate = '2025-11-21'; // Update this date with each release
+        lastUpdated.textContent = updateDate;
+      }
+    });
   }
 }

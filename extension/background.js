@@ -23,7 +23,6 @@ const DEFAULT_DEVICE_FLOW_CLIENT_ID = 'Ov23liZ5WHrt9Wf9FcLN';
 // Recommended: Use Cloudflare Worker proxy (workerProxyUrl) for secure uploads
 const R2_CONFIG_KEY = 'r2_config';
 const DEFAULT_R2_WORKER_PROXY_URL = ''; // Recommended: Cloudflare Worker proxy URL
-const DEFAULT_R2_ENDPOINT = ''; // Alternative: Direct R2 endpoint (less secure)
 const DEFAULT_R2_BUCKET_NAME = 'chrome-issue-reporter-screenshots'; // R2 bucket name
 const DEFAULT_R2_PUBLIC_URL = 'https://pub-6aff29174a263fec1dd8515745970ba3.r2.dev'; // Public URL for accessing uploaded files
 
@@ -1295,11 +1294,8 @@ async function getR2Config() {
   // Fallback to defaults if not configured
   return {
     workerProxyUrl: DEFAULT_R2_WORKER_PROXY_URL, // Recommended: Cloudflare Worker proxy URL for secure uploads
-    endpoint: DEFAULT_R2_ENDPOINT, // Alternative: Direct R2 endpoint
     bucketName: DEFAULT_R2_BUCKET_NAME,
-    publicUrl: DEFAULT_R2_PUBLIC_URL, // Public URL for accessing uploaded files
-    accessKeyId: '', // Not used if using Worker proxy
-    secretAccessKey: '' // Not used if using Worker proxy
+    publicUrl: DEFAULT_R2_PUBLIC_URL // Public URL for accessing uploaded files
   };
 }
 
@@ -1317,8 +1313,8 @@ async function uploadScreenshotToR2(dataUrl) {
     return await uploadViaWorkerProxy(config.workerProxyUrl, blob);
   }
   
-  if (!config.endpoint || !config.bucketName || !config.publicUrl) {
-    throw new Error('R2 configuration is incomplete. Please configure R2 settings in extension options. Either set workerProxyUrl for secure uploads, or configure endpoint, bucketName, and publicUrl for direct uploads.');
+  if (!config.bucketName || !config.publicUrl) {
+    throw new Error('R2 configuration is incomplete. Please configure R2 settings in extension options. Either set workerProxyUrl for secure uploads, or configure bucketName and publicUrl for direct uploads.');
   }
 
   // Direct R2 upload (requires public bucket with CORS)

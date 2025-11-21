@@ -314,6 +314,26 @@
         font-size: 0.75rem;
         font-weight: 600;
       }
+      
+      .footer {
+        text-align: center;
+        padding: 24px;
+        color: rgba(255, 255, 255, 0.8);
+        font-size: 0.9rem;
+      }
+      
+      .footer .version-info {
+        display: inline-block;
+        background: rgba(255, 255, 255, 0.1);
+        padding: 12px 20px;
+        border-radius: 8px;
+        backdrop-filter: blur(10px);
+      }
+      
+      .footer .version-info strong {
+        color: white;
+        font-weight: 600;
+      }
     </style>
   </head>
   <body>
@@ -439,6 +459,18 @@
       
       <div class="card">
         <div class="status" id="status"></div>
+      </div>
+      
+      <div class="footer">
+        <div class="version-info">
+          <strong>Version:</strong> <span id="version-number">Loading...</span>
+          <span style="margin: 0 12px; opacity: 0.5;">•</span>
+          <strong>Extension Name:</strong> <span id="extension-name">Loading...</span>
+          <br>
+          <span style="font-size: 0.85rem; opacity: 0.8; margin-top: 8px; display: inline-block;">
+            <strong>Last Updated:</strong> <span id="last-updated">Loading...</span>
+          </span>
+        </div>
       </div>
     </div>
     
