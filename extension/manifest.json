@@ -28,7 +28,8 @@
     "activeTab",
     "scripting",
     "storage",
-    "tabs"
+    "tabs",
+    "management"
   ],
   "host_permissions": [
     "https://api.github.com/*",
