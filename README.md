@@ -61,22 +61,42 @@ All technical details are stored in a hidden section, keeping your feedback area
 
 ```
 Chrome-Issue-Reporter/
-├── extension/              # Extension source files
-│   ├── manifest.json      # Extension manifest (V3)
-│   ├── background.js      # Service worker, OAuth auth, GitHub API
-│   ├── content.js         # Page context capture
-│   ├── options.html       # Extension options page
-│   ├── options.js         # Options page logic
+├── extension/                      # Extension source files
+│   ├── manifest.json              # Extension manifest (V3)
+│   ├── background.js              # Service worker, OAuth auth, GitHub API
+│   ├── content.js                 # Page context capture
+│   ├── options.html               # Extension options page
+│   ├── options.js                 # Options page logic (with version checking!)
 │   └── ui/
-│       ├── popup.html     # Extension popup UI
-│       └── popup.js       # Popup logic and issue submission
+│       ├── popup.html             # Extension popup UI
+│       └── popup.js               # Popup logic and issue submission
 ├── .github/
 │   └── workflows/
-│       └── release.yml    # Automated release workflow
-├── INSTALL.md             # Detailed installation guide
-├── README.md              # This file
-└── package.json           # Build scripts and metadata
+│       ├── deploy-to-cloudflare.yml  # Auto-update deployment
+│       └── publish-to-webstore.yml   # Chrome Web Store publishing
+├── scripts/
+│   ├── build-update.js            # Build and generate update files
+│   ├── update-manifest.js         # Generate update.xml
+│   └── setup-cloudflare.js        # Cloudflare setup helper
+├── cloudflare-worker-updates.js   # Worker for serving updates
+├── wrangler.toml                  # Worker configuration
+├── AUTO_UPDATE_SETUP.md           # Complete auto-update guide
+├── QUICK_DEPLOY.md                # Fast setup guide
+├── INSTALL.md                     # Installation guide
+├── README.md                      # This file
+└── package.json                   # Build scripts and metadata
 ```
+
+## 🔄 Auto-Updates
+
+This extension supports automatic updates via Cloudflare Workers! Once deployed:
+- **Chrome automatically checks for updates** every 5-6 hours
+- **Updates install silently** in the background
+- **Users always get the latest version** without any action
+
+**Setup Guide:** See [AUTO_UPDATE_SETUP.md](AUTO_UPDATE_SETUP.md) for complete setup instructions.
+
+**Quick Check:** Open the extension Options page to see your current version and check if updates are available.
 
 ## Configuration
 

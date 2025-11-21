@@ -27,3 +27,12 @@ key.pem
 # Credentials (keep private)
 YOUR_CLOUDFLARE_CREDENTIALS.md
 YOUR_CLOUDFLARE_SETUP.md
+.env
+.env.local
+
+# Generated update files (created by build process)
+update.xml
+
+# Wrangler
+.wrangler/
+wrangler.toml.backup
