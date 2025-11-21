@@ -1,0 +1,24 @@
+# Cloudflare Workers Configuration
+# This file configures the Worker that serves extension updates
+
+name = "chrome-issue-reporter-updates"
+main = "cloudflare-worker-updates.js"
+compatibility_date = "2024-01-01"
+
+# R2 Bucket Binding
+# This connects your Worker to your R2 bucket
+[[r2_buckets]]
+binding = "UPDATES_BUCKET"
+bucket_name = "chrome-issue-reporter-screenshots"  # Change this to your actual bucket name
+preview_bucket_name = "chrome-issue-reporter-screenshots"  # Optional: use a different bucket for preview/dev
+
+# Routes (Optional - if you want to use a custom domain)
+# Uncomment and configure if you have a custom domain
+# routes = [
+#   { pattern = "updates.yourdomain.com/*", zone_name = "yourdomain.com" }
+# ]
+
+# Workers.dev subdomain
+# Your worker will be available at: https://chrome-issue-reporter-updates.YOUR-ACCOUNT.workers.dev
+# You can disable this if using custom domains only
+# workers_dev = true

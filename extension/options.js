@@ -6,6 +6,7 @@ async function init() {
   await loadR2Config();
   await refreshAuthState();
   loadVersionInfo();
+  await checkForUpdates();
 
   document.getElementById('save').addEventListener('click', handleSave);
   document.getElementById('save-r2').addEventListener('click', handleSaveR2);
@@ -367,4 +368,67 @@ function loadVersionInfo() {
       }
     });
   }
+}
+
+async function checkForUpdates() {
+  const updateBanner = document.getElementById('update-banner');
+  if (!updateBanner) return;
+
+  try {
+    const manifest = chrome.runtime.getManifest();
+    const currentVersion = manifest.version;
+    const updateUrl = manifest.update_url;
+
+    // If no update_url, skip checking (Chrome Web Store handles updates)
+    if (!updateUrl) {
+      updateBanner.style.display = 'none';
+      return;
+    }
+
+    // Fetch the update manifest
+    const response = await fetch(updateUrl);
+    if (!response.ok) {
+      console.warn('Could not check for updates:', response.status);
+      updateBanner.style.display = 'none';
+      return;
+    }
+
+    const updateXml = await response.text();
+    const parser = new DOMParser();
+    const xmlDoc = parser.parseFromString(updateXml, 'text/xml');
+    const latestVersion = xmlDoc.querySelector('updatecheck')?.getAttribute('version');
+
+    if (!latestVersion) {
+      updateBanner.style.display = 'none';
+      return;
+    }
+
+    // Compare versions
+    if (compareVersions(latestVersion, currentVersion) > 0) {
+      // New version available
+      updateBanner.querySelector('.update-current-version').textContent = currentVersion;
+      updateBanner.querySelector('.update-latest-version').textContent = latestVersion;
+      updateBanner.style.display = 'block';
+    } else {
+      updateBanner.style.display = 'none';
+    }
+  } catch (error) {
+    console.error('Error checking for updates:', error);
+    updateBanner.style.display = 'none';
+  }
+}
+
+function compareVersions(v1, v2) {
+  const parts1 = v1.split('.').map(Number);
+  const parts2 = v2.split('.').map(Number);
+  
+  for (let i = 0; i < Math.max(parts1.length, parts2.length); i++) {
+    const part1 = parts1[i] || 0;
+    const part2 = parts2[i] || 0;
+    
+    if (part1 > part2) return 1;
+    if (part1 < part2) return -1;
+  }
+  
+  return 0;
 }

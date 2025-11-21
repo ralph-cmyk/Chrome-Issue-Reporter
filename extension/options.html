@@ -334,10 +334,74 @@
         color: white;
         font-weight: 600;
       }
+      
+      .update-banner {
+        background: linear-gradient(135deg, #00c9ff 0%, #92fe9d 100%);
+        border-radius: 16px;
+        padding: 20px 24px;
+        margin-bottom: 24px;
+        box-shadow: 0 8px 32px rgba(0, 201, 255, 0.3);
+        animation: slideIn 0.5s ease;
+      }
+      
+      .update-banner-content {
+        display: flex;
+        align-items: center;
+        gap: 16px;
+        color: white;
+      }
+      
+      .update-banner-icon {
+        font-size: 2.5rem;
+        flex-shrink: 0;
+      }
+      
+      .update-banner-text {
+        flex: 1;
+      }
+      
+      .update-banner-text strong {
+        font-size: 1.2rem;
+        display: block;
+        margin-bottom: 4px;
+      }
+      
+      .update-banner-action {
+        flex-shrink: 0;
+      }
+      
+      @keyframes slideIn {
+        from {
+          opacity: 0;
+          transform: translateY(-20px);
+        }
+        to {
+          opacity: 1;
+          transform: translateY(0);
+        }
+      }
     </style>
   </head>
   <body>
     <div class="container">
+      <!-- Update Banner -->
+      <div id="update-banner" class="update-banner" style="display: none;">
+        <div class="update-banner-content">
+          <div class="update-banner-icon">🎉</div>
+          <div class="update-banner-text">
+            <strong>New Version Available!</strong>
+            <p style="margin: 4px 0 0 0;">
+              Current: <span class="update-current-version">-</span> → Latest: <span class="update-latest-version">-</span>
+            </p>
+          </div>
+          <div class="update-banner-action">
+            <p style="margin: 0; font-size: 0.9rem; color: rgba(255,255,255,0.9);">
+              Chrome will auto-update within a few hours, or go to <code style="background: rgba(255,255,255,0.2); padding: 2px 6px; border-radius: 4px;">chrome://extensions</code> and click "Update" to install now.
+            </p>
+          </div>
+        </div>
+      </div>
+      
       <div class="card">
         <h1>Settings</h1>
         <p class="subtitle">Configure your GitHub authentication and repository settings</p>
