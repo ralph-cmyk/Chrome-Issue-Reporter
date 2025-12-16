@@ -1,15 +1,17 @@
 name: Publish to Chrome Web Store
 
 on:
-  push:
-    branches:
-      - main
+  # Disabled: Chrome Web Store publishing is intentionally turned off.
+  # (Keeping this workflow file for future re-enable / reference.)
+  workflow_dispatch:
 
 permissions:
   contents: write
 
 jobs:
   publish:
+    # Disabled: prevent any Web Store publish attempts.
+    if: false
     runs-on: ubuntu-latest
     
     steps:
