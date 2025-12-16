@@ -22,9 +22,26 @@ const DEFAULT_DEVICE_FLOW_CLIENT_ID = 'Ov23liZ5WHrt9Wf9FcLN';
 // These can be configured via chrome.storage.sync (R2_CONFIG_KEY) or hardcoded below
 // Recommended: Use Cloudflare Worker proxy (workerProxyUrl) for secure uploads
 const R2_CONFIG_KEY = 'r2_config';
-const DEFAULT_R2_WORKER_PROXY_URL = ''; // Recommended: Cloudflare Worker proxy URL
-const DEFAULT_R2_BUCKET_NAME = 'chrome-issue-reporter-screenshots'; // R2 bucket name
-const DEFAULT_R2_PUBLIC_URL = 'https://pub-6aff29174a263fec1dd8515745970ba3.r2.dev'; // Public URL for accessing uploaded files
+const DEFAULT_R2_WORKER_PROXY_URL = ''; // If empty, we'll try to auto-derive from manifest.update_url
+const DEFAULT_R2_BUCKET_NAME = 'chrome-issue-reporter-screenshots'; // Legacy (direct R2 upload removed)
+const DEFAULT_R2_PUBLIC_URL = 'https://pub-6aff29174a263fec1dd8515745970ba3.r2.dev'; // Legacy (direct R2 upload removed)
+
+function deriveWorkerProxyUrlFromManifest() {
+  const updateUrl = chrome.runtime.getManifest()?.update_url;
+  if (typeof updateUrl !== 'string' || !updateUrl) {
+    return '';
+  }
+  try {
+    const parsed = new URL(updateUrl);
+    // The repo ships a placeholder update_url; treat it as "unset".
+    if (parsed.hostname.includes('your-account')) {
+      return '';
+    }
+    return `${parsed.origin}/upload`;
+  } catch {
+    return '';
+  }
+}
 
 // GitHub OAuth Configuration
 const GITHUB_DEVICE_CODE_URL = 'https://github.com/login/device/code';
@@ -1289,11 +1306,20 @@ async function githubGraphQLRequest(query, variables = {}) {
 async function getR2Config() {
   const stored = await chrome.storage.sync.get(R2_CONFIG_KEY);
   if (stored?.[R2_CONFIG_KEY]) {
-    return stored[R2_CONFIG_KEY];
+    const saved = stored[R2_CONFIG_KEY] || {};
+    const derived = deriveWorkerProxyUrlFromManifest();
+    return {
+      // Prefer explicit config; fall back to derived/hardcoded defaults.
+      workerProxyUrl: (saved.workerProxyUrl || '').trim() || DEFAULT_R2_WORKER_PROXY_URL || derived,
+      // Keep legacy fields for backwards compatibility with older options UIs.
+      bucketName: saved.bucketName || DEFAULT_R2_BUCKET_NAME,
+      publicUrl: saved.publicUrl || DEFAULT_R2_PUBLIC_URL
+    };
   }
   // Fallback to defaults if not configured
+  const derived = deriveWorkerProxyUrlFromManifest();
   return {
-    workerProxyUrl: DEFAULT_R2_WORKER_PROXY_URL, // Recommended: Cloudflare Worker proxy URL for secure uploads
+    workerProxyUrl: DEFAULT_R2_WORKER_PROXY_URL || derived, // Recommended: Cloudflare Worker proxy URL for secure uploads
     bucketName: DEFAULT_R2_BUCKET_NAME,
     publicUrl: DEFAULT_R2_PUBLIC_URL // Public URL for accessing uploaded files
   };
@@ -1307,45 +1333,18 @@ async function uploadScreenshotToR2(dataUrl) {
 
   const config = await getR2Config();
   
-  // Check if using Worker proxy (recommended) or direct R2 upload
+  // Use Cloudflare Worker proxy for secure uploads.
+  // Direct-to-r2.dev PUT uploads do not work reliably (r2.dev is for public reads).
   if (config.workerProxyUrl) {
-    // Use Cloudflare Worker proxy for secure uploads
     return await uploadViaWorkerProxy(config.workerProxyUrl, blob);
   }
   
-  if (!config.bucketName || !config.publicUrl) {
-    throw new Error('R2 configuration is incomplete. Please configure R2 settings in extension options. Either set workerProxyUrl for secure uploads, or configure bucketName and publicUrl for direct uploads.');
-  }
-
-  // Direct R2 upload (requires public bucket with CORS)
-  // Note: This approach exposes the upload endpoint. Consider using Worker proxy instead.
-  const timestamp = Date.now();
-  const randomId = Math.random().toString(36).substring(2, 9);
-  const filename = `screenshots/${timestamp}-${randomId}.jpg`;
-  const publicUrl = `${config.publicUrl}/${filename}`;
-  
-  try {
-    // For public R2 bucket, upload directly
-    // The bucket must be configured for public writes with CORS
-    const uploadUrl = `${config.publicUrl}/${filename}`;
-    const response = await fetch(uploadUrl, {
-      method: 'PUT',
-      headers: {
-        'Content-Type': 'image/jpeg'
-      },
-      body: blob
-    });
-
-    if (!response.ok) {
-      const errorText = await response.text();
-      throw new Error(`R2 upload failed: ${response.status} - ${errorText}`);
-    }
-
-    return { url: publicUrl, download_url: publicUrl };
-  } catch (error) {
-    console.error('R2 upload error:', error);
-    throw new Error(`Failed to upload screenshot to R2: ${error.message}`);
-  }
+  throw new Error(
+    'Screenshot uploads are not configured.\n\n' +
+    'To fix:\n' +
+    '1) Deploy the Cloudflare Worker (updates worker) with /upload enabled\n' +
+    '2) Set your extension manifest update_url to your worker (…/update.xml), OR set "Worker Proxy URL" in Options.\n'
+  );
 }
 
 async function uploadViaWorkerProxy(workerUrl, blob) {

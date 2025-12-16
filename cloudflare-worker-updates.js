@@ -26,19 +26,36 @@ export default {
       return new Response(null, {
         headers: {
           'Access-Control-Allow-Origin': '*',
-          'Access-Control-Allow-Methods': 'GET, OPTIONS',
+          'Access-Control-Allow-Methods': 'GET, POST, OPTIONS',
           'Access-Control-Allow-Headers': 'Content-Type',
           'Access-Control-Max-Age': '86400',
         },
       });
     }
 
-    // Only allow GET requests
-    if (request.method !== 'GET') {
-      return new Response('Method not allowed', { status: 405 });
-    }
-
     try {
+      // Route: POST /upload - secure screenshot uploads to R2
+      if (url.pathname === '/upload') {
+        if (request.method !== 'POST') {
+          return withCors(new Response('Method not allowed', { status: 405 }));
+        }
+        return await handleScreenshotUpload(request, env, url);
+      }
+
+      // Route: GET /screenshots/* - serve uploaded screenshots from R2
+      if (url.pathname.startsWith('/screenshots/')) {
+        if (request.method !== 'GET') {
+          return withCors(new Response('Method not allowed', { status: 405 }));
+        }
+        const name = url.pathname.replace('/screenshots/', '');
+        return await serveScreenshot(env, name);
+      }
+
+      // Only allow GET requests for the remaining routes
+      if (request.method !== 'GET') {
+        return withCors(new Response('Method not allowed', { status: 405 }));
+      }
+
       // Route: /update.xml - Extension update manifest
       if (url.pathname === '/update.xml') {
         return await serveUpdateXml(env);
@@ -84,6 +101,8 @@ export default {
             <h2>Available Endpoints:</h2>
             <div class="endpoint">GET /update.xml - Extension update manifest</div>
             <div class="endpoint">GET /extensions/[filename].zip - Extension packages</div>
+            <div class="endpoint">POST /upload - Screenshot upload (multipart/form-data, field: screenshot)</div>
+            <div class="endpoint">GET /screenshots/[name].jpg - Serve uploaded screenshots</div>
             
             <h2>How It Works:</h2>
             <p>This server provides automatic updates for the Chrome extension.</p>
@@ -92,6 +111,7 @@ export default {
               <li>If a new version is available, Chrome downloads it from <code>/extensions/</code></li>
               <li>Updates are installed automatically in the background</li>
             </ul>
+            <p>It can also accept screenshot uploads and serve them back without making your R2 bucket public.</p>
             
             <p><small>Powered by Cloudflare Workers + R2</small></p>
           </body>
@@ -111,7 +131,7 @@ export default {
 
     } catch (error) {
       console.error('Worker error:', error);
-      return new Response(
+      return withCors(new Response(
         JSON.stringify({
           error: 'Internal Server Error',
           message: error.message,
@@ -120,10 +140,9 @@ export default {
           status: 500,
           headers: {
             'Content-Type': 'application/json',
-            'Access-Control-Allow-Origin': '*',
           },
         }
-      );
+      ));
     }
   },
 };
@@ -134,32 +153,29 @@ async function serveUpdateXml(env) {
     const object = await env.UPDATES_BUCKET.get('update.xml');
 
     if (!object) {
-      return new Response('Update manifest not found', { 
+      return withCors(new Response('Update manifest not found', { 
         status: 404,
         headers: {
           'Content-Type': 'text/plain',
-          'Access-Control-Allow-Origin': '*',
         },
-      });
+      }));
     }
 
     // Return the XML file
-    return new Response(object.body, {
+    return withCors(new Response(object.body, {
       headers: {
         'Content-Type': 'application/xml; charset=utf-8',
         'Cache-Control': 'public, max-age=300', // Cache for 5 minutes
-        'Access-Control-Allow-Origin': '*',
       },
-    });
+    }));
   } catch (error) {
     console.error('Error serving update.xml:', error);
-    return new Response('Error fetching update manifest', { 
+    return withCors(new Response('Error fetching update manifest', { 
       status: 500,
       headers: {
         'Content-Type': 'text/plain',
-        'Access-Control-Allow-Origin': '*',
       },
-    });
+    }));
   }
 }
 
@@ -167,56 +183,110 @@ async function serveExtensionZip(env, filename) {
   try {
     // Validate filename to prevent path traversal
     if (!filename || filename.includes('..') || filename.includes('/')) {
-      return new Response('Invalid filename', { 
+      return withCors(new Response('Invalid filename', { 
         status: 400,
         headers: {
           'Content-Type': 'text/plain',
-          'Access-Control-Allow-Origin': '*',
         },
-      });
+      }));
     }
 
     // Only allow .zip files
     if (!filename.endsWith('.zip')) {
-      return new Response('Only ZIP files are allowed', { 
+      return withCors(new Response('Only ZIP files are allowed', { 
         status: 400,
         headers: {
           'Content-Type': 'text/plain',
-          'Access-Control-Allow-Origin': '*',
         },
-      });
+      }));
     }
 
     // Fetch from R2
     const object = await env.UPDATES_BUCKET.get(`extensions/${filename}`);
 
     if (!object) {
-      return new Response('Extension file not found', { 
+      return withCors(new Response('Extension file not found', { 
         status: 404,
         headers: {
           'Content-Type': 'text/plain',
-          'Access-Control-Allow-Origin': '*',
         },
-      });
+      }));
     }
 
     // Return the ZIP file
-    return new Response(object.body, {
+    return withCors(new Response(object.body, {
       headers: {
         'Content-Type': 'application/zip',
         'Content-Disposition': `attachment; filename="${filename}"`,
         'Cache-Control': 'public, max-age=31536000', // Cache for 1 year (immutable)
-        'Access-Control-Allow-Origin': '*',
       },
-    });
+    }));
   } catch (error) {
     console.error('Error serving extension ZIP:', error);
-    return new Response('Error fetching extension file', { 
+    return withCors(new Response('Error fetching extension file', { 
       status: 500,
       headers: {
         'Content-Type': 'text/plain',
-        'Access-Control-Allow-Origin': '*',
       },
-    });
+    }));
   }
+}
+
+function withCors(response) {
+  const headers = new Headers(response.headers);
+  headers.set('Access-Control-Allow-Origin', '*');
+  return new Response(response.body, { status: response.status, statusText: response.statusText, headers });
+}
+
+async function handleScreenshotUpload(request, env, url) {
+  try {
+    const formData = await request.formData();
+    const screenshot = formData.get('screenshot');
+
+    if (!screenshot || !(screenshot instanceof File)) {
+      return withCors(new Response('No screenshot file provided', { status: 400 }));
+    }
+
+    const timestamp = Date.now();
+    const randomId = Math.random().toString(36).substring(2, 9);
+    const name = `${timestamp}-${randomId}.jpg`;
+    const key = `screenshots/${name}`;
+
+    await env.UPDATES_BUCKET.put(key, screenshot, {
+      httpMetadata: {
+        contentType: 'image/jpeg',
+        cacheControl: 'public, max-age=1209600' // 14 days
+      }
+    });
+
+    return withCors(new Response(JSON.stringify({ success: true, url: `${url.origin}/screenshots/${name}`, key }), {
+      headers: { 'Content-Type': 'application/json' }
+    }));
+  } catch (error) {
+    console.error('Upload error:', error);
+    return withCors(new Response(JSON.stringify({ success: false, error: error.message || 'Upload failed' }), {
+      status: 500,
+      headers: { 'Content-Type': 'application/json' }
+    }));
+  }
+}
+
+async function serveScreenshot(env, name) {
+  // Prevent path traversal / weird keys. We only serve the flat names we generate.
+  if (!name || name.includes('..') || name.includes('/') || !/^[a-zA-Z0-9_-]+\.jpg$/.test(name)) {
+    return withCors(new Response('Invalid screenshot name', { status: 400 }));
+  }
+
+  const key = `screenshots/${name}`;
+  const object = await env.UPDATES_BUCKET.get(key);
+  if (!object) {
+    return withCors(new Response('Not Found', { status: 404 }));
+  }
+
+  return withCors(new Response(object.body, {
+    headers: {
+      'Content-Type': 'image/jpeg',
+      'Cache-Control': 'public, max-age=1209600'
+    }
+  }));
 }

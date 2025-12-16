@@ -206,6 +206,7 @@ async function loadR2Config() {
   if (response?.success && response.config) {
     const config = response.config;
     document.getElementById('r2-worker-proxy-url').value = config.workerProxyUrl || '';
+    // Direct-to-r2.dev uploads are disabled; keep legacy fields visible but disabled.
     document.getElementById('r2-bucket-name').value = config.bucketName || 'chrome-issue-reporter-screenshots';
     document.getElementById('r2-public-url').value = config.publicUrl || 'https://pub-6aff29174a263fec1dd8515745970ba3.r2.dev';
   }
@@ -213,11 +214,18 @@ async function loadR2Config() {
 
 async function handleSaveR2() {
   const workerProxyUrl = document.getElementById('r2-worker-proxy-url').value.trim();
-  const bucketName = document.getElementById('r2-bucket-name').value.trim();
-  const publicUrl = document.getElementById('r2-public-url').value.trim();
+  // Legacy fields retained for backwards compatibility but not used.
+  const bucketName = document.getElementById('r2-bucket-name').value.trim() || 'chrome-issue-reporter-screenshots';
+  const publicUrl = document.getElementById('r2-public-url').value.trim() || 'https://pub-6aff29174a263fec1dd8515745970ba3.r2.dev';
 
-  if (!bucketName || !publicUrl) {
-    setStatus('⚠️ R2 configuration incomplete\n\nPlease provide at least Bucket Name and Public URL.', 'error');
+  if (!workerProxyUrl) {
+    setStatus(
+      '⚠️ Worker Proxy URL is required for screenshots.\n\n' +
+      'Either:\n' +
+      '- Paste your Worker upload URL here (…/upload), or\n' +
+      '- Configure manifest.json update_url to your Worker (…/update.xml) so it can be auto-derived.\n',
+      'error'
+    );
     return;
   }
 
@@ -238,7 +246,11 @@ async function handleSaveR2() {
   button.classList.remove('loading');
 
   if (response?.success) {
-    setStatus(`✅ R2 settings saved successfully!\n\n📦 Bucket: ${bucketName}\n🔗 Public URL: ${publicUrl}\n${workerProxyUrl ? `⚙️ Worker Proxy: ${workerProxyUrl}` : '⚠️ Using direct R2 upload (less secure)'}`, 'success');
+    setStatus(
+      `✅ Screenshot upload settings saved!\n\n⚙️ Worker Proxy: ${workerProxyUrl}\n\n` +
+      `ℹ️ Note: Direct r2.dev uploads are disabled; screenshots are served from the Worker.`,
+      'success'
+    );
   } else {
     setStatus('❌ Unable to save R2 settings\n\n' + (response?.error || 'Unknown error occurred'), 'error');
   }

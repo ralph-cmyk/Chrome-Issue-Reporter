@@ -472,7 +472,7 @@
       <div class="card">
         <h2>📸 Screenshot Storage (Cloudflare R2)</h2>
         <p class="hint" style="margin-top: 0;">
-          Configure Cloudflare R2 for storing screenshots. Recommended: Use a Worker proxy for secure uploads.
+          Screenshot uploads use a Cloudflare Worker proxy (recommended). Direct uploads to <code>r2.dev</code> are disabled.
         </p>
 
         <label for="r2-worker-proxy-url">Worker Proxy URL (Recommended)</label>
@@ -483,7 +483,7 @@
           placeholder="https://your-worker.workers.dev/upload"
         />
         <p class="hint">
-          Cloudflare Worker URL for secure screenshot uploads. Leave empty to use direct R2 upload.
+          Cloudflare Worker URL for secure screenshot uploads. If empty, the extension will try to auto-derive it from <code>manifest.json</code> <code>update_url</code> (same worker, <code>/upload</code> route).
         </p>
 
         <label for="r2-bucket-name">R2 Bucket Name</label>
@@ -493,6 +493,7 @@
           type="text"
           placeholder="chrome-issue-reporter-screenshots"
           value="chrome-issue-reporter-screenshots"
+          disabled
         />
 
         <label for="r2-public-url">R2 Public URL</label>
@@ -502,9 +503,10 @@
           type="text"
           placeholder="https://pub-ACCOUNT_ID.r2.dev"
           value="https://pub-6aff29174a263fec1dd8515745970ba3.r2.dev"
+          disabled
         />
         <p class="hint">
-          Public URL for accessing uploaded screenshots. Format: https://pub-ACCOUNT_ID.r2.dev
+          Not used anymore (screenshots are served from the Worker).
         </p>
 
         <div class="info-box">
