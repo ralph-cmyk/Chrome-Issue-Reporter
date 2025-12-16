@@ -7,6 +7,7 @@ async function init() {
   await refreshAuthState();
   loadVersionInfo();
   await checkForUpdates();
+  await initR2TestTools();
 
   document.getElementById('save').addEventListener('click', handleSave);
   document.getElementById('save-r2').addEventListener('click', handleSaveR2);
@@ -209,6 +210,14 @@ async function loadR2Config() {
     // Direct-to-r2.dev uploads are disabled; keep legacy fields visible but disabled.
     document.getElementById('r2-bucket-name').value = config.bucketName || 'chrome-issue-reporter-screenshots';
     document.getElementById('r2-public-url').value = config.publicUrl || 'https://pub-6aff29174a263fec1dd8515745970ba3.r2.dev';
+
+    const effectiveEl = document.getElementById('r2-effective-url');
+    if (effectiveEl) {
+      const source = config.workerProxyUrlSource ? ` (${config.workerProxyUrlSource})` : '';
+      effectiveEl.innerHTML = config.workerProxyUrl
+        ? `Using upload endpoint: <code>${escapeHtml(config.workerProxyUrl)}</code>${source}`
+        : `No upload endpoint configured. Set a Worker URL or configure <code>update_url</code> so it can be derived.`;
+    }
   }
 }
 
@@ -218,16 +227,7 @@ async function handleSaveR2() {
   const bucketName = document.getElementById('r2-bucket-name').value.trim() || 'chrome-issue-reporter-screenshots';
   const publicUrl = document.getElementById('r2-public-url').value.trim() || 'https://pub-6aff29174a263fec1dd8515745970ba3.r2.dev';
 
-  if (!workerProxyUrl) {
-    setStatus(
-      '⚠️ Worker Proxy URL is required for screenshots.\n\n' +
-      'Either:\n' +
-      '- Paste your Worker upload URL here (…/upload), or\n' +
-      '- Configure manifest.json update_url to your Worker (…/update.xml) so it can be auto-derived.\n',
-      'error'
-    );
-    return;
-  }
+  // Worker URL may be omitted if it can be auto-derived from update_url.
 
   const button = document.getElementById('save-r2');
   button.disabled = true;
@@ -247,10 +247,12 @@ async function handleSaveR2() {
 
   if (response?.success) {
     setStatus(
-      `✅ Screenshot upload settings saved!\n\n⚙️ Worker Proxy: ${workerProxyUrl}\n\n` +
-      `ℹ️ Note: Direct r2.dev uploads are disabled; screenshots are served from the Worker.`,
+      `✅ Screenshot upload settings saved!\n\n` +
+      `⚙️ Worker Proxy: ${workerProxyUrl || '(auto-derived from update_url, if available)'}\n\n` +
+      `ℹ️ Direct r2.dev uploads are disabled; screenshots are served from the Worker.`,
       'success'
     );
+    await loadR2Config();
   } else {
     setStatus('❌ Unable to save R2 settings\n\n' + (response?.error || 'Unknown error occurred'), 'error');
   }
@@ -368,18 +370,66 @@ function loadVersionInfo() {
   }
   
   // Display the extension's install/update date
-  // This will show when the current version was installed
+  // Show install time when available (less misleading than a hardcoded date).
   if (lastUpdated) {
     chrome.management.getSelf((extensionInfo) => {
-      if (extensionInfo && extensionInfo.installType) {
-        // For now, show the current date as we can't reliably get the actual update date
-        // In production, this should be updated in the manifest or build process
-        // Format: YYYY-MM-DD
-        const updateDate = '2025-11-21'; // Update this date with each release
-        lastUpdated.textContent = updateDate;
+      const installTime = extensionInfo?.installTime;
+      if (typeof installTime === 'number' && Number.isFinite(installTime)) {
+        const d = new Date(installTime);
+        const yyyy = d.getFullYear();
+        const mm = String(d.getMonth() + 1).padStart(2, '0');
+        const dd = String(d.getDate()).padStart(2, '0');
+        lastUpdated.textContent = `${yyyy}-${mm}-${dd}`;
+      } else {
+        lastUpdated.textContent = 'Unknown';
       }
     });
   }
+}
+
+async function initR2TestTools() {
+  const testButton = document.getElementById('test-r2-upload');
+  const resultEl = document.getElementById('r2-test-result');
+  if (!testButton || !resultEl) return;
+
+  // Only enable this for a specific GitHub user.
+  const allowlist = new Set(['ralph-cmyk']);
+  try {
+    const who = await chrome.runtime.sendMessage({ type: 'getViewerLogin' });
+    const login = who?.success ? who.login : null;
+    if (!login || !allowlist.has(login)) {
+      return;
+    }
+
+    testButton.style.display = 'inline-block';
+    testButton.addEventListener('click', async () => {
+      testButton.disabled = true;
+      resultEl.style.display = 'block';
+      resultEl.textContent = 'Testing upload…';
+      try {
+        const res = await chrome.runtime.sendMessage({ type: 'testR2Upload' });
+        if (!res?.success) {
+          throw new Error(res?.error || 'Test upload failed');
+        }
+        resultEl.innerHTML = `✅ Upload OK: <a class="link" href="${escapeHtml(res.url)}" target="_blank" rel="noreferrer">${escapeHtml(res.url)}</a>`;
+      } catch (error) {
+        resultEl.textContent = `❌ Upload failed: ${error.message || error}`;
+      } finally {
+        testButton.disabled = false;
+      }
+    });
+  } catch {
+    // Ignore
+  }
+}
+
+function escapeHtml(value) {
+  return String(value)
+    .replaceAll('&', '&amp;')
+    .replaceAll('<', '&lt;')
+    .replaceAll('>', '&gt;')
+    .replaceAll('"', '&quot;')
+    .replaceAll("'", '&#39;');
 }
 
 async function checkForUpdates() {

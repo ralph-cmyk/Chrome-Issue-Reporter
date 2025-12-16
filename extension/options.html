@@ -485,6 +485,7 @@
         <p class="hint">
           Cloudflare Worker URL for secure screenshot uploads. If empty, the extension will try to auto-derive it from <code>manifest.json</code> <code>update_url</code> (same worker, <code>/upload</code> route).
         </p>
+        <p class="hint" id="r2-effective-url" style="margin-top: -4px;"></p>
 
         <label for="r2-bucket-name">R2 Bucket Name</label>
         <input
@@ -520,7 +521,11 @@
           <button id="save-r2" type="button" class="primary">
             💾 Save R2 Settings
           </button>
+          <button id="test-r2-upload" type="button" class="secondary" style="display: none; margin-left: 12px;">
+            🧪 Test Screenshot Upload
+          </button>
         </div>
+        <div class="hint" id="r2-test-result" style="display:none; margin-top: 10px;"></div>
       </div>
       
       <div class="card">
@@ -534,7 +539,7 @@
           <strong>Extension Name:</strong> <span id="extension-name">Loading...</span>
           <br>
           <span style="font-size: 0.85rem; opacity: 0.8; margin-top: 8px; display: inline-block;">
-            <strong>Last Updated:</strong> <span id="last-updated">Loading...</span>
+          <strong>Installed:</strong> <span id="last-updated">Loading...</span>
           </span>
         </div>
       </div>

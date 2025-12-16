@@ -13,7 +13,7 @@ const LAST_COLUMN_KEY = 'last_column';
 const UNSUPPORTED_URL_PREFIXES = ['chrome://', 'chrome-extension://', 'edge://', 'about:'];
 // R2 has no practical size limit, but we'll keep a reasonable max for performance
 const MAX_SCREENSHOT_BYTES = 10 * 1024 * 1024; // 10 MB (increased from 20KB for R2)
-const MAX_SCREENSHOT_DATA_URL_LENGTH = 32000; // Still limit data URL size for memory
+const MAX_SCREENSHOT_PREVIEW_DATA_URL_LENGTH = 120000; // Preview only (keep UI memory reasonable)
 const MAX_OUTPUT_DIMENSION = 1920; // Increased from 320px for better quality
 const GITHUB_GRAPHQL_URL = 'https://api.github.com/graphql';
 const DEFAULT_DEVICE_FLOW_CLIENT_ID = 'Ov23liZ5WHrt9Wf9FcLN';
@@ -41,6 +41,47 @@ function deriveWorkerProxyUrlFromManifest() {
   } catch {
     return '';
   }
+}
+
+// In-memory cache for screenshot blobs captured during an issue flow.
+// MV3 service workers can be suspended; this is best-effort for immediate flows.
+const SCREENSHOT_CACHE = new Map(); // id -> { blob, previewDataUrl, createdAt }
+const SCREENSHOT_CACHE_TTL_MS = 15 * 60 * 1000; // 15 minutes
+const SCREENSHOT_CACHE_MAX_ITEMS = 20;
+
+function pruneScreenshotCache() {
+  const now = Date.now();
+  for (const [id, entry] of SCREENSHOT_CACHE.entries()) {
+    if (!entry?.createdAt || now - entry.createdAt > SCREENSHOT_CACHE_TTL_MS) {
+      SCREENSHOT_CACHE.delete(id);
+    }
+  }
+  if (SCREENSHOT_CACHE.size > SCREENSHOT_CACHE_MAX_ITEMS) {
+    const sorted = Array.from(SCREENSHOT_CACHE.entries()).sort(
+      (a, b) => (a[1].createdAt || 0) - (b[1].createdAt || 0)
+    );
+    const overflow = SCREENSHOT_CACHE.size - SCREENSHOT_CACHE_MAX_ITEMS;
+    for (let i = 0; i < overflow; i++) {
+      SCREENSHOT_CACHE.delete(sorted[i][0]);
+    }
+  }
+}
+
+function storeScreenshotBlob(blob, previewDataUrl = null) {
+  pruneScreenshotCache();
+  const timestamp = Date.now();
+  const randomId = Math.random().toString(36).substring(2, 9);
+  const id = `shot_${timestamp}_${randomId}`;
+  SCREENSHOT_CACHE.set(id, { blob, previewDataUrl, createdAt: timestamp });
+  return id;
+}
+
+function takeScreenshotBlob(id) {
+  pruneScreenshotCache();
+  const entry = SCREENSHOT_CACHE.get(id);
+  if (!entry?.blob) return null;
+  SCREENSHOT_CACHE.delete(id);
+  return entry;
 }
 
 // GitHub OAuth Configuration
@@ -100,7 +141,7 @@ chrome.contextMenus.onClicked.addListener(async (info, tab) => {
       await chrome.storage.local.set({ [LAST_CONTEXT_KEY]: context });
       
       // Capture full-page screenshot for context menu flow
-      let screenshotDataUrl = null;
+      let screenshot = null;
       let screenshotError = null;
       try {
         const screenshotResult = await captureElementScreenshot(tab.id, tab.windowId, null);
@@ -108,7 +149,7 @@ chrome.contextMenus.onClicked.addListener(async (info, tab) => {
           screenshotError = screenshotResult.error;
           console.warn('Screenshot capture error:', screenshotError);
         } else if (screenshotResult) {
-          screenshotDataUrl = screenshotResult;
+          screenshot = screenshotResult;
         }
       } catch (error) {
         screenshotError = error.message || 'Unknown screenshot capture error';
@@ -116,7 +157,7 @@ chrome.contextMenus.onClicked.addListener(async (info, tab) => {
       }
       
       await ensureContentScript(tab.id);
-      const payload = await buildIssueModalPayload(context, screenshotDataUrl, screenshotError);
+      const payload = await buildIssueModalPayload(context, screenshot, screenshotError);
       await chrome.tabs.sendMessage(tab.id, {
         type: 'showIssueModal',
         payload
@@ -148,6 +189,103 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
       case 'saveR2Config': {
         await chrome.storage.sync.set({ [R2_CONFIG_KEY]: message.config });
         sendResponse({ success: true });
+        break;
+      }
+      case 'getViewerLogin': {
+        try {
+          const token = await getStoredToken();
+          if (!token) {
+            sendResponse({ success: false, error: 'Authentication required.' });
+            break;
+          }
+          const response = await fetch('https://api.github.com/user', {
+            headers: {
+              Authorization: `token ${token}`,
+              Accept: 'application/vnd.github+json',
+              'X-GitHub-Api-Version': '2022-11-28'
+            }
+          });
+          if (!response.ok) {
+            sendResponse({ success: false, error: `Failed to load user (HTTP ${response.status})` });
+            break;
+          }
+          const user = await response.json();
+          sendResponse({ success: true, login: user?.login || null });
+        } catch (error) {
+          sendResponse({ success: false, error: error.message || 'Failed to load user.' });
+        }
+        break;
+      }
+      case 'testR2Upload': {
+        try {
+          const config = await getR2Config();
+          if (!config.workerProxyUrl) {
+            throw new Error('Worker Proxy URL not configured.');
+          }
+          const canvas = new OffscreenCanvas(64, 64);
+          const ctx = canvas.getContext('2d');
+          ctx.fillStyle = '#667eea';
+          ctx.fillRect(0, 0, 64, 64);
+          ctx.fillStyle = '#ffffff';
+          ctx.font = 'bold 14px sans-serif';
+          ctx.fillText('OK', 18, 38);
+          const blob = await canvas.convertToBlob({ type: 'image/jpeg', quality: 0.85 });
+          const result = await uploadViaWorkerProxy(config.workerProxyUrl, blob);
+          sendResponse({ success: true, url: result?.url || result?.download_url || null });
+        } catch (error) {
+          sendResponse({ success: false, error: error.message || 'Test upload failed.' });
+        }
+        break;
+      }
+      case 'startLiveSelectFlow': {
+        try {
+          const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
+          if (!tab?.id) throw new Error('No active tab found.');
+          const ready = await ensureReadyForIssueCreation(tab);
+          if (!ready) {
+            sendResponse({ success: false, error: 'Not ready for issue creation.' });
+            break;
+          }
+          await ensureContentScript(tab.id);
+          await chrome.tabs.sendMessage(tab.id, { type: 'startIssueFlow' });
+          sendResponse({ success: true });
+        } catch (error) {
+          sendResponse({ success: false, error: error.message || 'Unable to start live select.' });
+        }
+        break;
+      }
+      case 'startPageIssueFlow': {
+        try {
+          const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
+          if (!tab?.id) throw new Error('No active tab found.');
+          const ready = await ensureReadyForIssueCreation(tab);
+          if (!ready) {
+            sendResponse({ success: false, error: 'Not ready for issue creation.' });
+            break;
+          }
+          const context = await requestContextFromTab(tab.id);
+          if (context?.error) throw new Error(context.error);
+
+          let screenshot = null;
+          let screenshotError = null;
+          try {
+            const screenshotResult = await captureElementScreenshot(tab.id, tab.windowId, null);
+            if (screenshotResult && typeof screenshotResult === 'object' && 'error' in screenshotResult) {
+              screenshotError = screenshotResult.error;
+            } else {
+              screenshot = screenshotResult;
+            }
+          } catch (error) {
+            screenshotError = error.message || 'Unknown screenshot capture error';
+          }
+
+          await ensureContentScript(tab.id);
+          const payload = await buildIssueModalPayload(context, screenshot, screenshotError);
+          await chrome.tabs.sendMessage(tab.id, { type: 'showIssueModal', payload });
+          sendResponse({ success: true });
+        } catch (error) {
+          sendResponse({ success: false, error: error.message || 'Unable to start page issue flow.' });
+        }
         break;
       }
       case 'getAuthState': {
@@ -290,7 +428,7 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
 
         await chrome.storage.local.set({ [LAST_CONTEXT_KEY]: context });
 
-        let screenshotDataUrl = null;
+        let screenshot = null;
         let screenshotError = null;
         try {
           const screenshotResult = await captureElementScreenshot(tabId, sender.tab.windowId, message.selection || null);
@@ -298,7 +436,7 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
             screenshotError = screenshotResult.error;
             console.warn('Screenshot capture error:', screenshotError);
           } else if (screenshotResult) {
-            screenshotDataUrl = screenshotResult;
+            screenshot = screenshotResult;
           }
         } catch (error) {
           screenshotError = error.message || 'Unknown screenshot capture error';
@@ -306,7 +444,7 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
         }
 
         try {
-          const payload = await buildIssueModalPayload(context, screenshotDataUrl);
+          const payload = await buildIssueModalPayload(context, screenshot);
           if (screenshotError) {
             payload.screenshotError = screenshotError;
           }
@@ -323,7 +461,7 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
 
         sendResponse({ 
           success: true, 
-          screenshotCaptured: Boolean(screenshotDataUrl),
+          screenshotCaptured: Boolean(screenshot),
           screenshotError: screenshotError || null
         });
         break;
@@ -619,6 +757,7 @@ async function createIssue(payload = {}) {
 
   const context = payload.context || {};
   const screenshotDataUrl = typeof payload.screenshotDataUrl === 'string' ? payload.screenshotDataUrl : null;
+  const screenshotId = typeof payload.screenshotId === 'string' ? payload.screenshotId : null;
   const milestoneNumber = typeof payload.milestoneNumber === 'number' ? payload.milestoneNumber : null;
   const projectId = typeof payload.projectId === 'string' ? payload.projectId : null;
   const projectFieldId = typeof payload.projectFieldId === 'string' ? payload.projectFieldId : null;
@@ -702,15 +841,23 @@ async function createIssue(payload = {}) {
 
   let screenshotAttached = false;
   let screenshotUploadError = null;
-  if (screenshotDataUrl) {
+  if (screenshotId || screenshotDataUrl) {
     try {
-      const attachment = await uploadIssueAttachment({
-        owner,
-        repo,
-        issueNumber: issue.number,
-        dataUrl: screenshotDataUrl,
-        token
-      });
+      let blob = null;
+      if (screenshotId) {
+        const cached = takeScreenshotBlob(screenshotId);
+        blob = cached?.blob || null;
+        if (!blob) {
+          throw new Error('Screenshot expired. Please capture again.');
+        }
+      } else {
+        blob = await dataUrlToBlob(screenshotDataUrl);
+      }
+      if (!blob) {
+        throw new Error('Unable to prepare screenshot for upload');
+      }
+
+      const attachment = await uploadIssueAttachment({ blob });
       screenshotAttachmentUrl = attachment?.url || attachment?.download_url || null;
       if (screenshotAttachmentUrl) {
         const augmentedBody = `${issueBody}\n\n![Screenshot](${screenshotAttachmentUrl})`;
@@ -815,14 +962,15 @@ async function ensureContentScript(tabId) {
   throw new Error('Content script initialization timeout. Please try again.');
 }
 
-async function buildIssueModalPayload(context, screenshotDataUrl, screenshotError = null) {
+async function buildIssueModalPayload(context, screenshot, screenshotError = null) {
   const config = await getRepoConfig();
   const preferences = await getSelectionPreferences();
   const lastIssueData = await chrome.storage.local.get(LAST_ISSUE_KEY);
 
   return {
     context,
-    screenshotDataUrl,
+    screenshotId: screenshot?.screenshotId || null,
+    screenshotPreviewDataUrl: screenshot?.previewDataUrl || null,
     screenshotError,
     repo: config?.owner && config?.repo
       ? { owner: config.owner, name: config.repo }
@@ -880,7 +1028,7 @@ async function captureElementScreenshot(tabId, windowId, selection) {
     if (result && typeof result === 'object' && 'error' in result) {
       return result;
     }
-    return result || baseDataUrl;
+    return result || { error: 'Failed to process screenshot' };
   }
 
   try {
@@ -905,8 +1053,8 @@ async function captureElementScreenshot(tabId, windowId, selection) {
     const sy = Math.max(0, Math.min(bitmap.height - cropHeight, Math.round(rect.top * scale)));
 
     ctx.drawImage(bitmap, sx, sy, cropWidth, cropHeight, 0, 0, outputWidth, outputHeight);
-    // Improved quality levels for R2 (no size restrictions)
-    const qualityLevels = [0.9, 0.8, 0.7, 0.6];
+    // Quality levels for R2 upload
+    const qualityLevels = [0.9, 0.85, 0.8, 0.75];
     let croppedBlob = null;
 
     for (const quality of qualityLevels) {
@@ -920,29 +1068,9 @@ async function captureElementScreenshot(tabId, windowId, selection) {
     if (!croppedBlob) {
       return { error: 'Failed to process screenshot: Unable to create image blob' };
     }
-
-    // For R2 upload, we can use the blob directly instead of converting to data URL
-    // This avoids data URL size limits and is more efficient
-    // However, we need to convert to data URL for now since the upload function expects it
-    // TODO: Refactor to pass blob directly to upload function
-    
-    const buffer = await croppedBlob.arrayBuffer();
-    const base64 = arrayBufferToBase64(buffer);
-    
-    // R2 can handle larger files, so we don't need strict size limits
-    // But we still check data URL length for memory reasons
-    if ((croppedBlob.size || buffer.byteLength) > MAX_SCREENSHOT_BYTES) {
-      console.warn('Screenshot is large but will be uploaded to R2');
-    }
-
-    const dataUrl = `data:image/jpeg;base64,${base64}`;
-    if (dataUrl.length > MAX_SCREENSHOT_DATA_URL_LENGTH) {
-      // For very large screenshots, we might need to use blob directly
-      // For now, return error suggesting to capture a smaller area
-      return { error: 'Screenshot is too large. Please capture a smaller area or use the full page screenshot option.' };
-    }
-
-    return dataUrl;
+    const previewDataUrl = await createScreenshotPreviewDataUrl(croppedBlob);
+    const screenshotId = storeScreenshotBlob(croppedBlob, previewDataUrl);
+    return { screenshotId, previewDataUrl };
   } catch (error) {
     console.warn('Unable to crop screenshot to selection', error);
     return { error: `Failed to process screenshot: ${error.message}` };
@@ -973,8 +1101,8 @@ async function compressFullPageScreenshot(dataUrl) {
     const ctx = canvas.getContext('2d');
     ctx.drawImage(bitmap, 0, 0, outputWidth, outputHeight);
     
-    // High quality for R2 (no strict size limits)
-    const qualityLevels = [0.9, 0.85, 0.8];
+    // Quality levels for R2 upload
+    const qualityLevels = [0.9, 0.85, 0.8, 0.75];
     let croppedBlob = null;
 
     for (const quality of qualityLevels) {
@@ -995,15 +1123,9 @@ async function compressFullPageScreenshot(dataUrl) {
       console.warn('Full page screenshot is large but will be uploaded to R2');
     }
 
-    const buffer = await croppedBlob.arrayBuffer();
-    const base64 = arrayBufferToBase64(buffer);
-    const dataUrlResult = `data:image/jpeg;base64,${base64}`;
-    
-    if (dataUrlResult.length > MAX_SCREENSHOT_DATA_URL_LENGTH) {
-      return { error: 'Full page screenshot is too large. Please try capturing a specific element instead.' };
-    }
-
-    return dataUrlResult;
+    const previewDataUrl = await createScreenshotPreviewDataUrl(croppedBlob);
+    const screenshotId = storeScreenshotBlob(croppedBlob, previewDataUrl);
+    return { screenshotId, previewDataUrl };
   } catch (error) {
     console.warn('Unable to compress full page screenshot', error);
     return { error: `Failed to compress screenshot: ${error.message}` };
@@ -1019,6 +1141,42 @@ function arrayBufferToBase64(buffer) {
     binary += String.fromCharCode(...chunk);
   }
   return btoa(binary);
+}
+
+async function createScreenshotPreviewDataUrl(blob) {
+  try {
+    // If already small, use directly (still cap the resulting data URL).
+    if (blob.size <= 120 * 1024) {
+      const buffer = await blob.arrayBuffer();
+      const base64 = arrayBufferToBase64(buffer);
+      const dataUrl = `data:image/jpeg;base64,${base64}`;
+      if (dataUrl.length <= MAX_SCREENSHOT_PREVIEW_DATA_URL_LENGTH) {
+        return dataUrl;
+      }
+    }
+
+    // Otherwise generate a smaller preview.
+    const bitmap = await createImageBitmap(blob);
+    let outputWidth = bitmap.width;
+    let outputHeight = bitmap.height;
+    const maxDim = 480;
+    if (outputWidth > maxDim || outputHeight > maxDim) {
+      const scale = Math.min(maxDim / outputWidth, maxDim / outputHeight);
+      outputWidth = Math.max(1, Math.round(outputWidth * scale));
+      outputHeight = Math.max(1, Math.round(outputHeight * scale));
+    }
+    const canvas = new OffscreenCanvas(outputWidth, outputHeight);
+    const ctx = canvas.getContext('2d');
+    ctx.drawImage(bitmap, 0, 0, outputWidth, outputHeight);
+    const previewBlob = await canvas.convertToBlob({ type: 'image/jpeg', quality: 0.7 });
+    const buffer = await previewBlob.arrayBuffer();
+    const base64 = arrayBufferToBase64(buffer);
+    const dataUrl = `data:image/jpeg;base64,${base64}`;
+    return dataUrl.length <= MAX_SCREENSHOT_PREVIEW_DATA_URL_LENGTH ? dataUrl : null;
+  } catch (error) {
+    console.debug('Unable to create screenshot preview', error);
+    return null;
+  }
 }
 
 async function addIssueToProjectColumn(columnId, issueId) {
@@ -1311,6 +1469,11 @@ async function getR2Config() {
     return {
       // Prefer explicit config; fall back to derived/hardcoded defaults.
       workerProxyUrl: (saved.workerProxyUrl || '').trim() || DEFAULT_R2_WORKER_PROXY_URL || derived,
+      workerProxyUrlSource: (saved.workerProxyUrl || '').trim()
+        ? 'stored'
+        : (DEFAULT_R2_WORKER_PROXY_URL || derived)
+          ? (derived ? 'derived' : 'default')
+          : 'unset',
       // Keep legacy fields for backwards compatibility with older options UIs.
       bucketName: saved.bucketName || DEFAULT_R2_BUCKET_NAME,
       publicUrl: saved.publicUrl || DEFAULT_R2_PUBLIC_URL
@@ -1320,17 +1483,13 @@ async function getR2Config() {
   const derived = deriveWorkerProxyUrlFromManifest();
   return {
     workerProxyUrl: DEFAULT_R2_WORKER_PROXY_URL || derived, // Recommended: Cloudflare Worker proxy URL for secure uploads
+    workerProxyUrlSource: (DEFAULT_R2_WORKER_PROXY_URL || derived) ? (derived ? 'derived' : 'default') : 'unset',
     bucketName: DEFAULT_R2_BUCKET_NAME,
     publicUrl: DEFAULT_R2_PUBLIC_URL // Public URL for accessing uploaded files
   };
 }
 
-async function uploadScreenshotToR2(dataUrl) {
-  const blob = await dataUrlToBlob(dataUrl);
-  if (!blob) {
-    throw new Error('Unable to convert screenshot to blob');
-  }
-
+async function uploadScreenshotToR2Blob(blob) {
   const config = await getR2Config();
   
   // Use Cloudflare Worker proxy for secure uploads.
@@ -1352,10 +1511,7 @@ async function uploadViaWorkerProxy(workerUrl, blob) {
     const formData = new FormData();
     formData.append('screenshot', blob, `screenshot-${Date.now()}.jpg`);
     
-    const response = await fetch(workerUrl, {
-      method: 'POST',
-      body: formData
-    });
+    const response = await fetchWithRetry(workerUrl, { method: 'POST', body: formData }, { maxAttempts: 3 });
 
     if (!response.ok) {
       const errorText = await response.text();
@@ -1371,9 +1527,8 @@ async function uploadViaWorkerProxy(workerUrl, blob) {
 }
 
 // Legacy function name for compatibility - now uses R2
-async function uploadIssueAttachment({ owner, repo, issueNumber, dataUrl, token }) {
-  // Use R2 instead of GitHub attachments
-  return await uploadScreenshotToR2(dataUrl);
+async function uploadIssueAttachment({ blob }) {
+  return await uploadScreenshotToR2Blob(blob);
 }
 
 async function patchIssueBody(owner, repo, issueNumber, body, token) {
@@ -1405,6 +1560,33 @@ async function dataUrlToBlob(dataUrl) {
     console.warn('Unable to convert data URL to blob', error);
     return null;
   }
+}
+
+async function fetchWithRetry(url, init, options = {}) {
+  const maxAttempts = Number.isFinite(options.maxAttempts) ? options.maxAttempts : 3;
+  const baseDelayMs = Number.isFinite(options.baseDelayMs) ? options.baseDelayMs : 400;
+
+  let lastError = null;
+  for (let attempt = 1; attempt <= maxAttempts; attempt++) {
+    try {
+      const response = await fetch(url, init);
+      // Retry transient errors.
+      if (response.status === 429 || (response.status >= 500 && response.status <= 599)) {
+        lastError = new Error(`HTTP ${response.status}`);
+      } else {
+        return response;
+      }
+    } catch (error) {
+      lastError = error;
+    }
+
+    if (attempt < maxAttempts) {
+      const jitter = Math.floor(Math.random() * 150);
+      const delay = baseDelayMs * Math.pow(2, attempt - 1) + jitter;
+      await sleep(delay);
+    }
+  }
+  throw lastError || new Error('Request failed');
 }
 
 async function safeParseJson(response) {

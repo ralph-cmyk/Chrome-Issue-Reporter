@@ -18,7 +18,8 @@ let toastTimeoutId = null;
 const columnsCache = new Map();
 const modalState = {
   context: null,
-  screenshotDataUrl: null,
+  screenshotId: null,
+  screenshotPreviewDataUrl: null,
   repo: null,
   preferences: { milestoneNumber: null, projectId: null, statusFieldId: null, statusOptionId: null },
   generatedTitle: '',
@@ -909,7 +910,8 @@ function ensureIssueModalElements() {
 async function openIssueModal(payload = {}, fromLiveSelect = false) {
   const elements = ensureIssueModalElements();
   modalState.context = payload.context || null;
-  modalState.screenshotDataUrl = payload.screenshotDataUrl || null;
+  modalState.screenshotId = payload.screenshotId || null;
+  modalState.screenshotPreviewDataUrl = payload.screenshotPreviewDataUrl || null;
   modalState.repo = payload.repo || null;
   modalState.preferences = payload.preferences || { milestoneNumber: null, projectId: null, statusFieldId: null, statusOptionId: null };
   modalState.generatedTitle = buildDefaultTitle(modalState.context);
@@ -938,7 +940,7 @@ async function openIssueModal(payload = {}, fromLiveSelect = false) {
     : 'Repository not configured';
 
   updateContextPreview(modalState.context);
-  updateScreenshotPreview(modalState.screenshotDataUrl, modalState.context);
+  updateScreenshotPreview(modalState.screenshotPreviewDataUrl, Boolean(modalState.screenshotId), modalState.context);
   updateLastIssueLink(payload.lastIssue);
 
   elements.overlay.classList.add('is-visible');
@@ -959,13 +961,13 @@ async function openIssueModal(payload = {}, fromLiveSelect = false) {
   }
 
   if (fromLiveSelect) {
-    const hasScreenshot = Boolean(modalState.screenshotDataUrl);
+    const hasScreenshot = Boolean(modalState.screenshotId);
     showToast(
       hasScreenshot 
         ? 'Element and screenshot captured. Describe the problem and submit when ready.'
         : 'Element captured. Describe the problem and submit when ready.'
     );
-  } else if (modalState.screenshotDataUrl) {
+  } else if (modalState.screenshotId) {
     showToast('Screenshot captured. Describe the problem and submit when ready.');
   }
 }
@@ -1164,7 +1166,7 @@ async function handleModalSubmit(event) {
         projectId: projectId || undefined,
         projectFieldId: modalState.projectFieldId || undefined,
         projectOptionId: statusOptionId || undefined,
-        screenshotDataUrl: modalState.screenshotDataUrl
+        screenshotId: modalState.screenshotId
       }
     });
 
@@ -1172,7 +1174,7 @@ async function handleModalSubmit(event) {
       const issue = response.issue;
       let toastMessage = `Issue #${issue.number} created successfully!`;
       
-      if (modalState.screenshotDataUrl && !response.screenshotAttached) {
+      if (modalState.screenshotId && !response.screenshotAttached) {
         const errorMsg = response.issue?.screenshotUploadError || 'Screenshot upload failed';
         toastMessage += ` Note: ${errorMsg}`;
       }
@@ -1304,10 +1306,10 @@ function updateContextPreview(context) {
   modalElements.contextPreview.textContent = context ? formatContextPreview(context) : 'No context captured yet.';
 }
 
-function updateScreenshotPreview(dataUrl, context) {
+function updateScreenshotPreview(previewDataUrl, hasScreenshot, context) {
   if (!modalElements) return;
   modalElements.screenshotContainer.innerHTML = '';
-  if (!dataUrl) {
+  if (!hasScreenshot) {
     return;
   }
 
@@ -1340,19 +1342,33 @@ function updateScreenshotPreview(dataUrl, context) {
   titleContainer.appendChild(title);
 
   const image = document.createElement('img');
-  image.src = dataUrl;
-  image.alt = context?.elementDescription ? `Screenshot of ${context.elementDescription}` : 'Screenshot';
-  image.style.cursor = 'pointer';
-  image.title = 'Click to view full size';
-  image.addEventListener('click', () => {
-    const newWindow = window.open();
-    if (newWindow) {
-      newWindow.document.write(`<img src="${dataUrl}" style="max-width: 100%; height: auto;" />`);
-    }
-  });
+  if (previewDataUrl) {
+    image.src = previewDataUrl;
+    image.alt = context?.elementDescription ? `Screenshot of ${context.elementDescription}` : 'Screenshot';
+    image.style.cursor = 'pointer';
+    image.title = 'Click to view full size preview';
+    image.addEventListener('click', () => {
+      const newWindow = window.open();
+      if (newWindow) {
+        newWindow.document.write(`<img src="${previewDataUrl}" style="max-width: 100%; height: auto;" />`);
+      }
+    });
+  } else {
+    // Preview might be omitted to keep memory small; still indicate the screenshot exists.
+    image.alt = 'Screenshot captured (preview unavailable)';
+    image.style.display = 'none';
+  }
 
   modalElements.screenshotContainer.appendChild(titleContainer);
-  modalElements.screenshotContainer.appendChild(image);
+  if (previewDataUrl) {
+    modalElements.screenshotContainer.appendChild(image);
+  } else {
+    const note = document.createElement('div');
+    note.textContent = 'Screenshot captured (preview unavailable). It will be attached to the issue.';
+    note.style.fontSize = '12px';
+    note.style.color = '#64748b';
+    modalElements.screenshotContainer.appendChild(note);
+  }
 }
 
 function updateLastIssueLink(lastIssue) {
