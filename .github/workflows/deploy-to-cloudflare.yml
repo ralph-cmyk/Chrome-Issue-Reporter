@@ -24,11 +24,14 @@ jobs:
 
       - name: Build extension
         run: npm run build
+        env:
+          UPDATE_BASE_URL: ${{ secrets.UPDATE_BASE_URL }}
 
       - name: Package extension
         run: npm run package
         env:
           VERSION: ${{ github.ref == 'refs/heads/main' && github.run_number || 'dev' }}
+          UPDATE_BASE_URL: ${{ secrets.UPDATE_BASE_URL }}
 
       - name: Get extension version
         id: get-version
@@ -82,6 +85,13 @@ jobs:
         env:
           AWS_ACCESS_KEY_ID: ${{ secrets.R2_ACCESS_KEY_ID }}
           AWS_SECRET_ACCESS_KEY: ${{ secrets.R2_SECRET_ACCESS_KEY }}
+
+      - name: Deploy Cloudflare Worker (updates + screenshot upload)
+        uses: cloudflare/wrangler-action@v3
+        with:
+          apiToken: ${{ secrets.CF_API_TOKEN }}
+          accountId: ${{ secrets.CF_ACCOUNT_ID }}
+          command: deploy
 
       - name: Deploy to Cloudflare Pages (Alternative)
         if: false # Set to true if using Pages instead of R2
