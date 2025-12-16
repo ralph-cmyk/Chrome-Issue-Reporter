@@ -12,7 +12,7 @@ permissions:
 jobs:
   deploy:
     runs-on: ubuntu-latest
-    
+
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
@@ -20,7 +20,10 @@ jobs:
       - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
-          node-version: '20'
+          node-version: "20"
+
+      - name: Format check
+        run: npm run format:check
 
       - name: Build extension
         run: npm run build
@@ -114,13 +117,12 @@ jobs:
           body: |
             ## Changes
             - Auto-deployed from commit ${{ github.sha }}
-            
+
             ## Installation
             Download the extension ZIP and install manually, or wait for automatic update.
-            
+
             ## Files
             - Extension ZIP: `chrome-issue-reporter-v${{ steps.get-version.outputs.version }}.zip`
             - Update manifest: `update.xml`
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-

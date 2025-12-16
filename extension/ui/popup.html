@@ -1,4 +1,4 @@
-<!DOCTYPE html>
+<!doctype html>
 <html lang="en">
   <head>
     <meta charset="UTF-8" />
@@ -7,23 +7,24 @@
       * {
         box-sizing: border-box;
       }
-      
+
       body {
-        font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
+        font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto,
+          Oxygen, Ubuntu, Cantarell, sans-serif;
         width: 420px;
         margin: 0;
         padding: 0;
         background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
         color: #333;
       }
-      
+
       .container {
         background: white;
         border-radius: 12px 12px 0 0;
         padding: 24px;
         box-shadow: 0 -4px 24px rgba(0, 0, 0, 0.1);
       }
-      
+
       h1 {
         font-size: 1.5rem;
         margin: 0 0 20px 0;
@@ -36,13 +37,13 @@
         align-items: center;
         gap: 8px;
       }
-      
+
       h1::before {
         content: "🐛";
         font-size: 1.5rem;
         -webkit-text-fill-color: initial;
       }
-      
+
       label {
         display: block;
         font-weight: 600;
@@ -51,7 +52,7 @@
         color: #555;
         font-size: 0.9rem;
       }
-      
+
       input,
       textarea {
         width: 100%;
@@ -63,7 +64,7 @@
         transition: all 0.2s ease;
         background: #fafbfc;
       }
-      
+
       input:focus,
       textarea:focus {
         outline: none;
@@ -71,13 +72,13 @@
         background: white;
         box-shadow: 0 0 0 3px rgba(102, 126, 234, 0.1);
       }
-      
+
       textarea {
         min-height: 140px;
         resize: vertical;
         line-height: 1.5;
       }
-      
+
       button {
         margin-top: 16px;
         padding: 12px 20px;
@@ -89,7 +90,7 @@
         transition: all 0.2s ease;
         font-family: inherit;
       }
-      
+
       button#live-select {
         width: 100%;
         background: linear-gradient(135deg, #34d399 0%, #10b981 100%);
@@ -99,16 +100,36 @@
         font-size: 1rem;
         padding: 14px 20px;
       }
-      
+
+      button#open-modal {
+        width: 100%;
+        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+        color: white;
+        box-shadow: 0 4px 12px rgba(102, 126, 234, 0.3);
+        margin-bottom: 8px;
+        font-size: 1rem;
+        padding: 14px 20px;
+      }
+
+      button#open-modal:hover:not(:disabled) {
+        transform: translateY(-2px);
+        box-shadow: 0 6px 16px rgba(102, 126, 234, 0.4);
+      }
+
+      button#open-modal:disabled {
+        opacity: 0.6;
+        cursor: not-allowed;
+      }
+
       button#live-select:hover:not(:disabled) {
         transform: translateY(-2px);
         box-shadow: 0 6px 16px rgba(16, 185, 129, 0.4);
       }
-      
+
       button#live-select:active:not(:disabled) {
         transform: translateY(0);
       }
-      
+
       button#live-select:disabled {
         opacity: 0.5;
         cursor: not-allowed;
@@ -116,7 +137,7 @@
         box-shadow: none;
         position: relative;
       }
-      
+
       button#live-select:disabled::after {
         content: "NOT AUTHENTICATED";
         display: block;
@@ -125,7 +146,7 @@
         margin-top: 4px;
         letter-spacing: 0.5px;
       }
-      
+
       /* Visually hidden text for screen readers */
       .sr-only {
         position: absolute;
@@ -138,28 +159,9 @@
         white-space: nowrap;
         border-width: 0;
       }
-      
-      button#create {
-        width: 100%;
-        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-        color: white;
-        box-shadow: 0 4px 12px rgba(102, 126, 234, 0.3);
-      }
-      
-      button#create:hover:not(:disabled) {
-        transform: translateY(-2px);
-        box-shadow: 0 6px 16px rgba(102, 126, 234, 0.4);
-      }
-      
-      button#create:active:not(:disabled) {
-        transform: translateY(0);
-      }
-      
-      button#create:disabled {
-        opacity: 0.6;
-        cursor: not-allowed;
-      }
-      
+
+      /* create button removed; popup is now a launcher */
+
       button#clear-context {
         background: #f6f8fa;
         color: #586069;
@@ -167,11 +169,11 @@
         padding: 8px 16px;
         font-size: 0.85rem;
       }
-      
+
       button#clear-context:hover {
         background: #e1e4e8;
       }
-      
+
       .repo-info {
         display: flex;
         justify-content: space-between;
@@ -182,7 +184,7 @@
         margin-bottom: 20px;
         color: white;
       }
-      
+
       .repo-name {
         font-weight: 600;
         font-size: 0.95rem;
@@ -190,19 +192,19 @@
         align-items: center;
         gap: 6px;
       }
-      
+
       .repo-info .link {
         color: white;
         text-decoration: none;
         font-weight: 600;
         transition: opacity 0.2s ease;
       }
-      
+
       .repo-info .link:hover {
         opacity: 0.8;
         text-decoration: underline;
       }
-      
+
       .hint {
         margin-top: -2px;
         margin-bottom: 12px;
@@ -210,7 +212,7 @@
         color: #6b7280;
         font-style: italic;
       }
-      
+
       .status {
         margin-top: 16px;
         padding: 12px;
@@ -219,29 +221,29 @@
         font-size: 0.9rem;
         animation: slideIn 0.3s ease;
       }
-      
+
       .status:empty {
         display: none;
       }
-      
+
       .status.success {
         background: #d4edda;
         color: #155724;
         border: 1px solid #c3e6cb;
       }
-      
+
       .status.error {
         background: #f8d7da;
         color: #721c24;
         border: 1px solid #f5c6cb;
       }
-      
+
       .status.info {
         background: #d1ecf1;
         color: #0c5460;
         border: 1px solid #bee5eb;
       }
-      
+
       .footer {
         margin-top: 16px;
         padding-top: 16px;
@@ -250,19 +252,19 @@
         justify-content: space-between;
         align-items: center;
       }
-      
+
       .link {
         color: #667eea;
         text-decoration: none;
         font-weight: 600;
         transition: color 0.2s ease;
       }
-      
+
       .link:hover {
         color: #764ba2;
         text-decoration: underline;
       }
-      
+
       .context-preview {
         margin-top: 12px;
         font-size: 0.85rem;
@@ -276,11 +278,11 @@
         border: 1px solid #e1e4e8;
         color: #586069;
       }
-      
+
       #full-context-details {
         width: 100%;
       }
-      
+
       #full-context-details summary {
         cursor: pointer;
         user-select: none;
@@ -293,43 +295,43 @@
         transition: all 0.2s ease;
         list-style: none;
       }
-      
+
       #full-context-details summary::-webkit-details-marker {
         display: none;
       }
-      
+
       #full-context-details summary::before {
         content: "▶ ";
         display: inline-block;
         transition: transform 0.2s ease;
       }
-      
+
       #full-context-details[open] summary::before {
         transform: rotate(90deg);
       }
-      
+
       #full-context-details summary:hover {
         background: #e9ecef;
       }
-      
+
       .context-preview::-webkit-scrollbar {
         width: 6px;
       }
-      
+
       .context-preview::-webkit-scrollbar-track {
         background: #f1f1f1;
         border-radius: 4px;
       }
-      
+
       .context-preview::-webkit-scrollbar-thumb {
         background: #888;
         border-radius: 4px;
       }
-      
+
       .context-preview::-webkit-scrollbar-thumb:hover {
         background: #555;
       }
-      
+
       .info-bar {
         display: flex;
         justify-content: space-between;
@@ -341,7 +343,7 @@
         font-size: 0.85rem;
         border: 1px solid #e1e4e8;
       }
-      
+
       .checkbox-container {
         display: flex;
         align-items: center;
@@ -354,17 +356,17 @@
         cursor: pointer;
         transition: all 0.2s ease;
       }
-      
+
       .checkbox-container:hover {
         background: #e9ecef;
       }
-      
+
       .checkbox-container input[type="checkbox"] {
         width: auto;
         margin: 0;
         cursor: pointer;
       }
-      
+
       .checkbox-container label {
         margin: 0;
         cursor: pointer;
@@ -373,19 +375,19 @@
         font-size: 0.9rem;
         flex: 1;
       }
-      
+
       .info-item {
         display: flex;
         flex-direction: column;
         gap: 6px;
       }
-      
+
       .info-item span {
         display: flex;
         align-items: center;
         gap: 6px;
       }
-      
+
       .badge {
         display: inline-flex;
         align-items: center;
@@ -395,17 +397,17 @@
         font-size: 0.8rem;
         font-weight: 600;
       }
-      
+
       .badge.success {
         background: #d4edda;
         color: #155724;
       }
-      
+
       .badge.warning {
         background: #fff3cd;
         color: #856404;
       }
-      
+
       @keyframes slideIn {
         from {
           opacity: 0;
@@ -416,24 +418,25 @@
           transform: translateY(0);
         }
       }
-      
+
       @keyframes pulse {
-        0%, 100% {
+        0%,
+        100% {
           opacity: 1;
         }
         50% {
           opacity: 0.5;
         }
       }
-      
+
       .loading {
         animation: pulse 1.5s ease-in-out infinite;
       }
-      
+
       #last-issue {
         font-size: 0.9rem;
       }
-      
+
       #last-issue a {
         display: inline-flex;
         align-items: center;
@@ -446,7 +449,7 @@
         font-weight: 600;
         transition: all 0.2s ease;
       }
-      
+
       #last-issue a:hover {
         background: #c3e6cb;
         transform: translateY(-1px);
@@ -456,29 +459,32 @@
   <body>
     <div class="container">
       <h1>Create GitHub Issue</h1>
-      
+
       <div class="repo-info" id="repo-info">
         <span class="repo-name">📂 Repository not configured</span>
         <a class="link" id="open-options" href="#">⚙️ Settings</a>
       </div>
 
       <form id="issue-form">
-        <button id="live-select" type="button" aria-label="Live Select Element - Authentication required">🎯 Live Select Element</button>
-        
-        <label for="description">💭 What's the problem?</label>
-        <textarea id="description" required placeholder="Describe what's wrong with this element or page..." style="min-height: 120px;"></textarea>
-        <div class="hint">💡 Press Shift+Enter to save and create the issue</div>
+        <button
+          id="live-select"
+          type="button"
+          aria-label="Live Select Element - Authentication required"
+        >
+          🎯 Live Select Element
+        </button>
+        <button id="open-modal" type="button">
+          📝 Report Issue on This Page
+        </button>
 
-        <label for="title">📝 Issue Title</label>
-        <input id="title" type="text" required placeholder="Auto-filled based on selected element..." />
-        
-        <input type="hidden" id="technical-context" />
-
-        <button id="create" type="submit">✨ Create Issue</button>
+        <div class="hint" style="margin-top: 8px">
+          This opens the in-page modal (recommended). It captures page context
+          and a screenshot, then you write the issue description there.
+        </div>
       </form>
-      
+
       <div class="status" id="status"></div>
-      
+
       <div class="footer">
         <span id="last-issue"></span>
         <details id="full-context-details">
@@ -487,7 +493,7 @@
         </details>
       </div>
     </div>
-    
+
     <script src="popup.js" type="module"></script>
   </body>
 </html>

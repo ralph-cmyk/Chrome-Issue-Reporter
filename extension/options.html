@@ -1,4 +1,4 @@
-<!DOCTYPE html>
+<!doctype html>
 <html lang="en">
   <head>
     <meta charset="UTF-8" />
@@ -7,21 +7,22 @@
       * {
         box-sizing: border-box;
       }
-      
+
       body {
-        font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
+        font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto,
+          Oxygen, Ubuntu, Cantarell, sans-serif;
         margin: 0;
         padding: 0;
         background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
         min-height: 100vh;
       }
-      
+
       .container {
         max-width: 800px;
         margin: 0 auto;
         padding: 40px 24px;
       }
-      
+
       .card {
         background: white;
         border-radius: 16px;
@@ -29,7 +30,7 @@
         box-shadow: 0 8px 32px rgba(0, 0, 0, 0.1);
         margin-bottom: 24px;
       }
-      
+
       h1 {
         font-size: 2.2rem;
         margin: 0 0 12px 0;
@@ -42,19 +43,19 @@
         align-items: center;
         gap: 12px;
       }
-      
+
       h1::before {
         content: "⚙️";
         font-size: 2.2rem;
         -webkit-text-fill-color: initial;
       }
-      
+
       .subtitle {
         color: #666;
         font-size: 1.1rem;
         margin-bottom: 32px;
       }
-      
+
       h2 {
         font-size: 1.4rem;
         margin: 0 0 16px 0;
@@ -64,7 +65,7 @@
         align-items: center;
         gap: 8px;
       }
-      
+
       label {
         display: block;
         margin-top: 20px;
@@ -73,7 +74,7 @@
         color: #555;
         font-size: 0.95rem;
       }
-      
+
       input,
       textarea,
       select {
@@ -86,7 +87,7 @@
         transition: all 0.2s ease;
         background: #fafbfc;
       }
-      
+
       input:focus,
       textarea:focus,
       select:focus {
@@ -95,7 +96,7 @@
         background: white;
         box-shadow: 0 0 0 3px rgba(102, 126, 234, 0.1);
       }
-      
+
       button {
         padding: 12px 24px;
         border: none;
@@ -109,51 +110,51 @@
         align-items: center;
         gap: 8px;
       }
-      
+
       button.primary {
         background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
         color: white;
         box-shadow: 0 4px 12px rgba(102, 126, 234, 0.3);
       }
-      
+
       button.primary:hover:not(:disabled) {
         transform: translateY(-2px);
         box-shadow: 0 6px 16px rgba(102, 126, 234, 0.4);
       }
-      
+
       button.secondary {
         background: white;
         color: #667eea;
         border: 2px solid #667eea;
       }
-      
+
       button.secondary:hover:not(:disabled) {
         background: #f6f8ff;
       }
-      
+
       button.danger {
         background: #dc3545;
         color: white;
       }
-      
+
       button.danger:hover:not(:disabled) {
         background: #c82333;
         transform: translateY(-1px);
       }
-      
+
       button:disabled {
         opacity: 0.5;
         cursor: not-allowed;
         transform: none !important;
       }
-      
+
       .actions {
         display: flex;
         gap: 12px;
         flex-wrap: wrap;
         margin-top: 20px;
       }
-      
+
       .status {
         margin-top: 24px;
         padding: 16px;
@@ -163,36 +164,36 @@
         white-space: pre-wrap;
         animation: slideIn 0.3s ease;
       }
-      
+
       .status:empty {
         display: none;
       }
-      
+
       .status.success {
         background: #d4edda;
         color: #155724;
         border: 2px solid #c3e6cb;
       }
-      
+
       .status.error {
         background: #f8d7da;
         color: #721c24;
         border: 2px solid #f5c6cb;
       }
-      
+
       .status.info {
         background: #d1ecf1;
         color: #0c5460;
         border: 2px solid #bee5eb;
       }
-      
+
       .hint {
         color: #666;
         font-size: 0.9rem;
         margin-top: 8px;
         line-height: 1.5;
       }
-      
+
       .info-box {
         background: linear-gradient(135deg, #e3f2fd 0%, #e8eaf6 100%);
         border-left: 4px solid #667eea;
@@ -201,24 +202,24 @@
         margin: 20px 0;
         line-height: 1.6;
       }
-      
+
       .info-box strong {
         color: #667eea;
         display: block;
         margin-bottom: 8px;
       }
-      
+
       .link {
         color: #667eea;
         text-decoration: none;
         font-weight: 600;
       }
-      
+
       .link:hover {
         text-decoration: underline;
         color: #764ba2;
       }
-      
+
       @keyframes slideIn {
         from {
           opacity: 0;
@@ -229,35 +230,41 @@
           transform: translateY(0);
         }
       }
-      
+
       @keyframes pulse {
-        0%, 100% {
+        0%,
+        100% {
           opacity: 1;
         }
         50% {
           opacity: 0.5;
         }
       }
-      
+
       .loading {
         animation: pulse 1.5s ease-in-out infinite;
       }
-      
+
       .divider {
         height: 1px;
-        background: linear-gradient(to right, transparent, #e1e4e8, transparent);
+        background: linear-gradient(
+          to right,
+          transparent,
+          #e1e4e8,
+          transparent
+        );
         margin: 24px 0;
       }
-      
+
       select {
         cursor: pointer;
       }
-      
+
       select:disabled {
         cursor: not-allowed;
         opacity: 0.6;
       }
-      
+
       .repo-list {
         max-height: 400px;
         overflow-y: auto;
@@ -266,7 +273,7 @@
         padding: 8px;
         background: #fafbfc;
       }
-      
+
       .repo-item {
         display: flex;
         align-items: center;
@@ -278,24 +285,24 @@
         background: white;
         border: 2px solid #e1e4e8;
       }
-      
+
       .repo-item:hover {
         background: #f6f8ff;
         border-color: #667eea;
       }
-      
+
       .repo-item.selected {
         background: linear-gradient(135deg, #e3f2fd 0%, #e8eaf6 100%);
         border-color: #667eea;
         font-weight: 600;
       }
-      
+
       .repo-item input[type="radio"] {
         width: auto;
         margin: 0 12px 0 0;
         cursor: pointer;
       }
-      
+
       .repo-item label {
         margin: 0;
         flex: 1;
@@ -305,7 +312,7 @@
         gap: 8px;
         font-weight: 500;
       }
-      
+
       .repo-private-badge {
         background: #ffc107;
         color: #000;
@@ -314,14 +321,14 @@
         font-size: 0.75rem;
         font-weight: 600;
       }
-      
+
       .footer {
         text-align: center;
         padding: 24px;
         color: rgba(255, 255, 255, 0.8);
         font-size: 0.9rem;
       }
-      
+
       .footer .version-info {
         display: inline-block;
         background: rgba(255, 255, 255, 0.1);
@@ -329,12 +336,12 @@
         border-radius: 8px;
         backdrop-filter: blur(10px);
       }
-      
+
       .footer .version-info strong {
         color: white;
         font-weight: 600;
       }
-      
+
       .update-banner {
         background: linear-gradient(135deg, #00c9ff 0%, #92fe9d 100%);
         border-radius: 16px;
@@ -343,33 +350,33 @@
         box-shadow: 0 8px 32px rgba(0, 201, 255, 0.3);
         animation: slideIn 0.5s ease;
       }
-      
+
       .update-banner-content {
         display: flex;
         align-items: center;
         gap: 16px;
         color: white;
       }
-      
+
       .update-banner-icon {
         font-size: 2.5rem;
         flex-shrink: 0;
       }
-      
+
       .update-banner-text {
         flex: 1;
       }
-      
+
       .update-banner-text strong {
         font-size: 1.2rem;
         display: block;
         margin-bottom: 4px;
       }
-      
+
       .update-banner-action {
         flex-shrink: 0;
       }
-      
+
       @keyframes slideIn {
         from {
           opacity: 0;
@@ -385,39 +392,60 @@
   <body>
     <div class="container">
       <!-- Update Banner -->
-      <div id="update-banner" class="update-banner" style="display: none;">
+      <div id="update-banner" class="update-banner" style="display: none">
         <div class="update-banner-content">
           <div class="update-banner-icon">🎉</div>
           <div class="update-banner-text">
             <strong>New Version Available!</strong>
-            <p style="margin: 4px 0 0 0;">
-              Current: <span class="update-current-version">-</span> → Latest: <span class="update-latest-version">-</span>
+            <p style="margin: 4px 0 0 0">
+              Current: <span class="update-current-version">-</span> → Latest:
+              <span class="update-latest-version">-</span>
             </p>
           </div>
           <div class="update-banner-action">
-            <p style="margin: 0; font-size: 0.9rem; color: rgba(255,255,255,0.9);">
-              Chrome will auto-update within a few hours, or go to <code style="background: rgba(255,255,255,0.2); padding: 2px 6px; border-radius: 4px;">chrome://extensions</code> and click "Update" to install now.
+            <p
+              style="
+                margin: 0;
+                font-size: 0.9rem;
+                color: rgba(255, 255, 255, 0.9);
+              "
+            >
+              Chrome will auto-update within a few hours, or go to
+              <code
+                style="
+                  background: rgba(255, 255, 255, 0.2);
+                  padding: 2px 6px;
+                  border-radius: 4px;
+                "
+                >chrome://extensions</code
+              >
+              and click "Update" to install now.
             </p>
           </div>
         </div>
       </div>
-      
+
       <div class="card">
         <h1>Settings</h1>
-        <p class="subtitle">Configure your GitHub authentication and repository settings</p>
-        
+        <p class="subtitle">
+          Configure your GitHub authentication and repository settings
+        </p>
+
         <h2>🔐 GitHub Authentication</h2>
-        
+
         <div class="info-box">
           <strong>📋 How sign-in works</strong>
-          <p style="margin: 0 0 12px 0;">
-            Click <em>Connect with GitHub</em> and we will copy the verification code to your clipboard automatically. Paste it into the GitHub tab that opens, approve the device, and you’re done.
+          <p style="margin: 0 0 12px 0">
+            Click <em>Connect with GitHub</em> and we will copy the verification
+            code to your clipboard automatically. Paste it into the GitHub tab
+            that opens, approve the device, and you’re done.
           </p>
-          <p style="margin: 0;">
-            Requested scopes: <code>repo</code>, <code>project</code>, and <code>read:org</code> (needed for GitHub Projects).
+          <p style="margin: 0">
+            Requested scopes: <code>repo</code>, <code>project</code>, and
+            <code>read:org</code> (needed for GitHub Projects).
           </p>
         </div>
-        
+
         <div class="actions">
           <button id="oauth-signin" type="button" class="primary">
             🔐 Connect with GitHub
@@ -428,25 +456,38 @@
         </div>
 
         <p class="hint">
-          Verification code is copied automatically—just press ⌘/Ctrl + V on GitHub. Once authorized, the token stays in Chrome sync storage and never leaves your browser.
+          Verification code is copied automatically—just press ⌘/Ctrl + V on
+          GitHub. Once authorized, the token stays in Chrome sync storage and
+          never leaves your browser.
         </p>
 
         <div class="divider"></div>
 
         <h2>📚 Repository Selection</h2>
-        <p class="hint" style="margin-top: 0;">
-          Select the GitHub repository where issues will be created. Your repositories will load automatically after signing in.
+        <p class="hint" style="margin-top: 0">
+          Select the GitHub repository where issues will be created. Your
+          repositories will load automatically after signing in.
         </p>
-        
-        <div id="repo-list-container" style="display: none;">
+
+        <div id="repo-list-container" style="display: none">
           <div id="repo-list" class="repo-list">
             <!-- Repositories will be loaded here as radio buttons -->
           </div>
         </div>
-        
-        <div id="no-repos-message" style="display: none; padding: 16px; background: #f8f9fa; border-radius: 8px; margin: 16px 0;">
-          <p style="margin: 0; color: #666;">
-            ℹ️ No repositories loaded yet. Sign in with GitHub to see your repositories.
+
+        <div
+          id="no-repos-message"
+          style="
+            display: none;
+            padding: 16px;
+            background: #f8f9fa;
+            border-radius: 8px;
+            margin: 16px 0;
+          "
+        >
+          <p style="margin: 0; color: #666">
+            ℹ️ No repositories loaded yet. Sign in with GitHub to see your
+            repositories.
           </p>
         </div>
 
@@ -459,7 +500,8 @@
           value="created by ChromeExtension"
         />
         <p class="hint">
-          Comma-separated labels that will be applied to all created issues. Default: "created by ChromeExtension"
+          Comma-separated labels that will be applied to all created issues.
+          Default: "created by ChromeExtension"
         </p>
 
         <div class="actions">
@@ -471,8 +513,9 @@
 
       <div class="card">
         <h2>📸 Screenshot Storage (Cloudflare R2)</h2>
-        <p class="hint" style="margin-top: 0;">
-          Screenshot uploads use a Cloudflare Worker proxy (recommended). Direct uploads to <code>r2.dev</code> are disabled.
+        <p class="hint" style="margin-top: 0">
+          Screenshot uploads use a Cloudflare Worker proxy (recommended). Direct
+          uploads to <code>r2.dev</code> are disabled.
         </p>
 
         <label for="r2-worker-proxy-url">Worker Proxy URL (Recommended)</label>
@@ -483,9 +526,11 @@
           placeholder="https://your-worker.workers.dev/upload"
         />
         <p class="hint">
-          Cloudflare Worker URL for secure screenshot uploads. If empty, the extension will try to auto-derive it from <code>manifest.json</code> <code>update_url</code> (same worker, <code>/upload</code> route).
+          Cloudflare Worker URL for secure screenshot uploads. If empty, the
+          extension will try to auto-derive it from <code>manifest.json</code>
+          <code>update_url</code> (same worker, <code>/upload</code> route).
         </p>
-        <p class="hint" id="r2-effective-url" style="margin-top: -4px;"></p>
+        <p class="hint" id="r2-effective-url" style="margin-top: -4px"></p>
 
         <label for="r2-bucket-name">R2 Bucket Name</label>
         <input
@@ -512,8 +557,15 @@
 
         <div class="info-box">
           <strong>ℹ️ Setup Instructions</strong>
-          <p style="margin: 8px 0 0 0;">
-            See <a href="https://github.com/ralph-cmyk/Chrome-Issue-Reporter/blob/main/CLOUDFLARE_SETUP.md" target="_blank" class="link">CLOUDFLARE_SETUP.md</a> for detailed setup instructions.
+          <p style="margin: 8px 0 0 0">
+            See
+            <a
+              href="https://github.com/ralph-cmyk/Chrome-Issue-Reporter/blob/main/CLOUDFLARE_SETUP.md"
+              target="_blank"
+              class="link"
+              >CLOUDFLARE_SETUP.md</a
+            >
+            for detailed setup instructions.
           </p>
         </div>
 
@@ -521,30 +573,48 @@
           <button id="save-r2" type="button" class="primary">
             💾 Save R2 Settings
           </button>
-          <button id="test-r2-upload" type="button" class="secondary" style="display: none; margin-left: 12px;">
+          <button
+            id="test-r2-upload"
+            type="button"
+            class="secondary"
+            style="display: none; margin-left: 12px"
+          >
             🧪 Test Screenshot Upload
           </button>
         </div>
-        <div class="hint" id="r2-test-result" style="display:none; margin-top: 10px;"></div>
+        <div
+          class="hint"
+          id="r2-test-result"
+          style="display: none; margin-top: 10px"
+        ></div>
       </div>
-      
+
       <div class="card">
         <div class="status" id="status"></div>
       </div>
-      
+
       <div class="footer">
         <div class="version-info">
           <strong>Version:</strong> <span id="version-number">Loading...</span>
-          <span style="margin: 0 12px; opacity: 0.5;">•</span>
-          <strong>Extension Name:</strong> <span id="extension-name">Loading...</span>
-          <br>
-          <span style="font-size: 0.85rem; opacity: 0.8; margin-top: 8px; display: inline-block;">
-          <strong>Installed:</strong> <span id="last-updated">Loading...</span>
+          <span style="margin: 0 12px; opacity: 0.5">•</span>
+          <strong>Extension Name:</strong>
+          <span id="extension-name">Loading...</span>
+          <br />
+          <span
+            style="
+              font-size: 0.85rem;
+              opacity: 0.8;
+              margin-top: 8px;
+              display: inline-block;
+            "
+          >
+            <strong>Installed:</strong>
+            <span id="last-updated">Loading...</span>
           </span>
         </div>
       </div>
     </div>
-    
+
     <script src="options.js" type="module"></script>
   </body>
 </html>

@@ -13,29 +13,29 @@ jobs:
     # Disabled: prevent any Web Store publish attempts.
     if: false
     runs-on: ubuntu-latest
-    
+
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
-      
+
       - name: Set up Node.js
         uses: actions/setup-node@v4
         with:
-          node-version: '18'
-      
+          node-version: "18"
+
       - name: Get version from manifest
         id: get_version
         run: |
           VERSION=$(node -p "require('./extension/manifest.json').version")
           echo "version=$VERSION" >> "$GITHUB_OUTPUT"
           echo "Extension version: $VERSION"
-      
+
       - name: Build extension
         run: npm run build
-      
+
       - name: Create ZIP file
         run: (cd dist && zip -r ../chrome-issue-reporter.zip .)
-      
+
       - name: Publish to Chrome Web Store
         id: webstore_upload
         # Allow workflow to continue even if Web Store upload fails
@@ -52,7 +52,7 @@ jobs:
           client-secret: ${{ secrets.CHROME_CLIENT_SECRET }}
           refresh-token: ${{ secrets.CHROME_REFRESH_TOKEN }}
           publish: true
-      
+
       - name: Determine installation message
         id: install_msg
         run: |
@@ -63,7 +63,7 @@ jobs:
             echo "method=Download the ZIP file below and install manually (Chrome Web Store not yet configured)" >> "$GITHUB_OUTPUT"
             echo "updates=**📦 Manual Installation Required:** This extension is not yet published to the Chrome Web Store. Follow the installation instructions in INSTALL.md." >> "$GITHUB_OUTPUT"
           fi
-      
+
       - name: Create GitHub Release
         uses: softprops/action-gh-release@v2
         with:
@@ -71,22 +71,22 @@ jobs:
           name: Release v${{ steps.get_version.outputs.version }}
           body: |
             ## Chrome Issue Reporter v${{ steps.get_version.outputs.version }}
-            
+
             ### ✅ Installation
-            
+
             ${{ steps.install_msg.outputs.method }}
-            
+
             ${{ steps.install_msg.outputs.updates }}
-            
+
             ### Configuration Required
-            
+
             After installation, configure the extension:
             1. Create a GitHub OAuth App at https://github.com/settings/developers
             2. Open the extension's **Options** page and enter your OAuth App Client ID
             3. Sign in with GitHub
             4. Select your target repository
             5. Start creating issues!
-            
+
             📖 See [QUICKSTART.md](https://github.com/${{ github.repository }}/blob/main/QUICKSTART.md) for a quick setup guide
             📖 See [INSTALL.md](https://github.com/${{ github.repository }}/blob/main/INSTALL.md) for detailed instructions
           files: chrome-issue-reporter.zip

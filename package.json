@@ -6,6 +6,8 @@
     "clean": "rm -rf dist chrome-issue-reporter*.zip",
     "build": "npm run clean && mkdir -p dist && cp -r extension/* dist/ && node scripts/apply-update-url.js",
     "package": "npm run build && VERSION=$(node -p \"require('./extension/manifest.json').version\") && cd dist && zip -r ../chrome-issue-reporter-v${VERSION}.zip * && cd .. && echo \"\\n✅ Extension packaged successfully: chrome-issue-reporter-v${VERSION}.zip\"",
+    "format": "npx -y prettier@3.3.3 --write \"extension/**/*.{js,html,json}\" \"scripts/**/*.js\" \".github/workflows/*.yml\"",
+    "format:check": "npx -y prettier@3.3.3 --check \"extension/**/*.{js,html,json}\" \"scripts/**/*.js\" \".github/workflows/*.yml\"",
     "build-update": "node scripts/build-update.js",
     "generate-update-xml": "node scripts/update-manifest.js",
     "setup-cloudflare": "node scripts/setup-cloudflare.js"

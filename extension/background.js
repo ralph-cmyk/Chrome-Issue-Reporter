@@ -1,45 +1,51 @@
 // Import sanitization utility
-import { buildSanitizedIssue } from './sanitizer.js';
+import { buildSanitizedIssue } from "./sanitizer.js";
 
-const TOKEN_KEY = 'github_token';
-const CONFIG_KEY = 'repo_config';
-const LAST_CONTEXT_KEY = 'last_context';
-const LAST_ISSUE_KEY = 'last_issue';
-const CONTEXT_MENU_ID = 'create-github-issue';
+const TOKEN_KEY = "github_token";
+const CONFIG_KEY = "repo_config";
+const LAST_CONTEXT_KEY = "last_context";
+const LAST_ISSUE_KEY = "last_issue";
+const CONTEXT_MENU_ID = "create-github-issue";
 const MAX_SNIPPET_LENGTH = 5 * 1024; // 5 KB
 const SCRIPT_INITIALIZATION_DELAY = 100; // ms to wait for content script to initialize
-const LAST_MILESTONE_KEY = 'last_milestone';
-const LAST_COLUMN_KEY = 'last_column';
-const UNSUPPORTED_URL_PREFIXES = ['chrome://', 'chrome-extension://', 'edge://', 'about:'];
+const LAST_MILESTONE_KEY = "last_milestone";
+const LAST_COLUMN_KEY = "last_column";
+const UNSUPPORTED_URL_PREFIXES = [
+  "chrome://",
+  "chrome-extension://",
+  "edge://",
+  "about:",
+];
 // R2 has no practical size limit, but we'll keep a reasonable max for performance
 const MAX_SCREENSHOT_BYTES = 10 * 1024 * 1024; // 10 MB (increased from 20KB for R2)
 const MAX_SCREENSHOT_PREVIEW_DATA_URL_LENGTH = 120000; // Preview only (keep UI memory reasonable)
 const MAX_OUTPUT_DIMENSION = 1920; // Increased from 320px for better quality
-const GITHUB_GRAPHQL_URL = 'https://api.github.com/graphql';
-const DEFAULT_DEVICE_FLOW_CLIENT_ID = 'Ov23liZ5WHrt9Wf9FcLN';
+const GITHUB_GRAPHQL_URL = "https://api.github.com/graphql";
+const DEFAULT_DEVICE_FLOW_CLIENT_ID = "Ov23liZ5WHrt9Wf9FcLN";
 
 // Cloudflare R2 Configuration
 // These can be configured via chrome.storage.sync (R2_CONFIG_KEY) or hardcoded below
 // Recommended: Use Cloudflare Worker proxy (workerProxyUrl) for secure uploads
-const R2_CONFIG_KEY = 'r2_config';
-const DEFAULT_R2_WORKER_PROXY_URL = ''; // If empty, we'll try to auto-derive from manifest.update_url
-const DEFAULT_R2_BUCKET_NAME = 'chrome-issue-reporter-screenshots'; // Legacy (direct R2 upload removed)
-const DEFAULT_R2_PUBLIC_URL = 'https://pub-6aff29174a263fec1dd8515745970ba3.r2.dev'; // Legacy (direct R2 upload removed)
+const R2_CONFIG_KEY = "r2_config";
+const DEFAULT_R2_WORKER_PROXY_URL = ""; // If empty, we'll try to auto-derive from manifest.update_url
+const DEFAULT_R2_BUCKET_NAME = "chrome-issue-reporter-screenshots"; // Legacy (direct R2 upload removed)
+const DEFAULT_R2_PUBLIC_URL =
+  "https://pub-6aff29174a263fec1dd8515745970ba3.r2.dev"; // Legacy (direct R2 upload removed)
 
 function deriveWorkerProxyUrlFromManifest() {
   const updateUrl = chrome.runtime.getManifest()?.update_url;
-  if (typeof updateUrl !== 'string' || !updateUrl) {
-    return '';
+  if (typeof updateUrl !== "string" || !updateUrl) {
+    return "";
   }
   try {
     const parsed = new URL(updateUrl);
     // The repo ships a placeholder update_url; treat it as "unset".
-    if (parsed.hostname.includes('your-account')) {
-      return '';
+    if (parsed.hostname.includes("your-account")) {
+      return "";
     }
     return `${parsed.origin}/upload`;
   } catch {
-    return '';
+    return "";
   }
 }
 
@@ -58,7 +64,7 @@ function pruneScreenshotCache() {
   }
   if (SCREENSHOT_CACHE.size > SCREENSHOT_CACHE_MAX_ITEMS) {
     const sorted = Array.from(SCREENSHOT_CACHE.entries()).sort(
-      (a, b) => (a[1].createdAt || 0) - (b[1].createdAt || 0)
+      (a, b) => (a[1].createdAt || 0) - (b[1].createdAt || 0),
     );
     const overflow = SCREENSHOT_CACHE.size - SCREENSHOT_CACHE_MAX_ITEMS;
     for (let i = 0; i < overflow; i++) {
@@ -85,8 +91,8 @@ function takeScreenshotBlob(id) {
 }
 
 // GitHub OAuth Configuration
-const GITHUB_DEVICE_CODE_URL = 'https://github.com/login/device/code';
-const GITHUB_ACCESS_TOKEN_URL = 'https://github.com/login/oauth/access_token';
+const GITHUB_DEVICE_CODE_URL = "https://github.com/login/device/code";
+const GITHUB_ACCESS_TOKEN_URL = "https://github.com/login/oauth/access_token";
 
 chrome.runtime.onInstalled.addListener(async () => {
   await ensureContextMenu();
@@ -107,20 +113,67 @@ chrome.action.onClicked.addListener(async (tab) => {
     if (!ready) {
       return;
     }
-    await ensureContentScript(tab.id);
-    await chrome.tabs.sendMessage(tab.id, { type: 'startIssueFlow' });
+    // Unified flow: open the issue modal on the current page (with screenshot),
+    // not live select. Live select remains accessible from popup/context menu.
+    await startPageIssueFlowForTab(tab);
   } catch (error) {
-    console.error('Failed to start issue flow from action click', error);
+    console.error("Failed to start issue flow from action click", error);
     try {
       await chrome.tabs.sendMessage(tab.id, {
-        type: 'issueFlowError',
-        message: error.message || 'Unable to start issue capture on this page.'
+        type: "issueFlowError",
+        message: error.message || "Unable to start issue capture on this page.",
       });
     } catch {
       // No-op if tab cannot be messaged
     }
   }
 });
+
+async function startPageIssueFlowForTab(tab) {
+  if (!tab?.id) throw new Error("Missing tab id.");
+  if (
+    tab?.url &&
+    UNSUPPORTED_URL_PREFIXES.some((prefix) => tab.url.startsWith(prefix))
+  ) {
+    throw new Error(
+      "This extension is not available on browser internal pages (chrome://, chrome-extension://, etc.). Please use it on a regular web page.",
+    );
+  }
+
+  const context = await requestContextFromTab(tab.id);
+  if (context?.error) {
+    throw new Error(context.error);
+  }
+
+  let screenshot = null;
+  let screenshotError = null;
+  try {
+    const screenshotResult = await captureElementScreenshot(
+      tab.id,
+      tab.windowId,
+      null,
+    );
+    if (
+      screenshotResult &&
+      typeof screenshotResult === "object" &&
+      "error" in screenshotResult
+    ) {
+      screenshotError = screenshotResult.error;
+    } else {
+      screenshot = screenshotResult;
+    }
+  } catch (error) {
+    screenshotError = error.message || "Unknown screenshot capture error";
+  }
+
+  await ensureContentScript(tab.id);
+  const payload = await buildIssueModalPayload(
+    context,
+    screenshot,
+    screenshotError,
+  );
+  await chrome.tabs.sendMessage(tab.id, { type: "showIssueModal", payload });
+}
 
 chrome.contextMenus.onClicked.addListener(async (info, tab) => {
   if (info.menuItemId !== CONTEXT_MENU_ID || !tab?.id) {
@@ -134,295 +187,364 @@ chrome.contextMenus.onClicked.addListener(async (info, tab) => {
     }
     const context = await requestContextFromTab(tab.id);
     if (context?.error) {
-      console.warn('Context capture reported an error:', context.error);
+      console.warn("Context capture reported an error:", context.error);
       return;
     }
     if (context) {
       await chrome.storage.local.set({ [LAST_CONTEXT_KEY]: context });
-      
+
       // Capture full-page screenshot for context menu flow
       let screenshot = null;
       let screenshotError = null;
       try {
-        const screenshotResult = await captureElementScreenshot(tab.id, tab.windowId, null);
-        if (screenshotResult && typeof screenshotResult === 'object' && 'error' in screenshotResult) {
+        const screenshotResult = await captureElementScreenshot(
+          tab.id,
+          tab.windowId,
+          null,
+        );
+        if (
+          screenshotResult &&
+          typeof screenshotResult === "object" &&
+          "error" in screenshotResult
+        ) {
           screenshotError = screenshotResult.error;
-          console.warn('Screenshot capture error:', screenshotError);
+          console.warn("Screenshot capture error:", screenshotError);
         } else if (screenshotResult) {
           screenshot = screenshotResult;
         }
       } catch (error) {
-        screenshotError = error.message || 'Unknown screenshot capture error';
-        console.warn('Unable to capture screenshot from context menu', error);
+        screenshotError = error.message || "Unknown screenshot capture error";
+        console.warn("Unable to capture screenshot from context menu", error);
       }
-      
+
       await ensureContentScript(tab.id);
-      const payload = await buildIssueModalPayload(context, screenshot, screenshotError);
+      const payload = await buildIssueModalPayload(
+        context,
+        screenshot,
+        screenshotError,
+      );
       await chrome.tabs.sendMessage(tab.id, {
-        type: 'showIssueModal',
-        payload
+        type: "showIssueModal",
+        payload,
       });
     }
   } catch (error) {
-    console.error('Failed to capture context from tab', error);
+    console.error("Failed to capture context from tab", error);
   }
 });
 
 chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
   (async () => {
     switch (message?.type) {
-      case 'getConfig': {
+      case "getConfig": {
         const config = await getRepoConfig();
         sendResponse({ success: true, config });
         break;
       }
-      case 'saveConfig': {
+      case "saveConfig": {
         await saveRepoConfig(message.config);
         sendResponse({ success: true });
         break;
       }
-      case 'getR2Config': {
+      case "getR2Config": {
         const config = await getR2Config();
         sendResponse({ success: true, config });
         break;
       }
-      case 'saveR2Config': {
+      case "saveR2Config": {
         await chrome.storage.sync.set({ [R2_CONFIG_KEY]: message.config });
         sendResponse({ success: true });
         break;
       }
-      case 'getViewerLogin': {
+      case "getViewerLogin": {
         try {
           const token = await getStoredToken();
           if (!token) {
-            sendResponse({ success: false, error: 'Authentication required.' });
+            sendResponse({ success: false, error: "Authentication required." });
             break;
           }
-          const response = await fetch('https://api.github.com/user', {
+          const response = await fetch("https://api.github.com/user", {
             headers: {
               Authorization: `token ${token}`,
-              Accept: 'application/vnd.github+json',
-              'X-GitHub-Api-Version': '2022-11-28'
-            }
+              Accept: "application/vnd.github+json",
+              "X-GitHub-Api-Version": "2022-11-28",
+            },
           });
           if (!response.ok) {
-            sendResponse({ success: false, error: `Failed to load user (HTTP ${response.status})` });
+            sendResponse({
+              success: false,
+              error: `Failed to load user (HTTP ${response.status})`,
+            });
             break;
           }
           const user = await response.json();
           sendResponse({ success: true, login: user?.login || null });
         } catch (error) {
-          sendResponse({ success: false, error: error.message || 'Failed to load user.' });
+          sendResponse({
+            success: false,
+            error: error.message || "Failed to load user.",
+          });
         }
         break;
       }
-      case 'testR2Upload': {
+      case "testR2Upload": {
         try {
           const config = await getR2Config();
           if (!config.workerProxyUrl) {
-            throw new Error('Worker Proxy URL not configured.');
+            throw new Error("Worker Proxy URL not configured.");
           }
           const canvas = new OffscreenCanvas(64, 64);
-          const ctx = canvas.getContext('2d');
-          ctx.fillStyle = '#667eea';
+          const ctx = canvas.getContext("2d");
+          ctx.fillStyle = "#667eea";
           ctx.fillRect(0, 0, 64, 64);
-          ctx.fillStyle = '#ffffff';
-          ctx.font = 'bold 14px sans-serif';
-          ctx.fillText('OK', 18, 38);
-          const blob = await canvas.convertToBlob({ type: 'image/jpeg', quality: 0.85 });
-          const result = await uploadViaWorkerProxy(config.workerProxyUrl, blob);
-          sendResponse({ success: true, url: result?.url || result?.download_url || null });
+          ctx.fillStyle = "#ffffff";
+          ctx.font = "bold 14px sans-serif";
+          ctx.fillText("OK", 18, 38);
+          const blob = await canvas.convertToBlob({
+            type: "image/jpeg",
+            quality: 0.85,
+          });
+          const result = await uploadViaWorkerProxy(
+            config.workerProxyUrl,
+            blob,
+          );
+          sendResponse({
+            success: true,
+            url: result?.url || result?.download_url || null,
+          });
         } catch (error) {
-          sendResponse({ success: false, error: error.message || 'Test upload failed.' });
+          sendResponse({
+            success: false,
+            error: error.message || "Test upload failed.",
+          });
         }
         break;
       }
-      case 'startLiveSelectFlow': {
+      case "startLiveSelectFlow": {
         try {
-          const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
-          if (!tab?.id) throw new Error('No active tab found.');
+          const [tab] = await chrome.tabs.query({
+            active: true,
+            currentWindow: true,
+          });
+          if (!tab?.id) throw new Error("No active tab found.");
           const ready = await ensureReadyForIssueCreation(tab);
           if (!ready) {
-            sendResponse({ success: false, error: 'Not ready for issue creation.' });
+            sendResponse({
+              success: false,
+              error: "Not ready for issue creation.",
+            });
             break;
           }
           await ensureContentScript(tab.id);
-          await chrome.tabs.sendMessage(tab.id, { type: 'startIssueFlow' });
+          await chrome.tabs.sendMessage(tab.id, { type: "startIssueFlow" });
           sendResponse({ success: true });
         } catch (error) {
-          sendResponse({ success: false, error: error.message || 'Unable to start live select.' });
+          sendResponse({
+            success: false,
+            error: error.message || "Unable to start live select.",
+          });
         }
         break;
       }
-      case 'startPageIssueFlow': {
+      case "startPageIssueFlow": {
         try {
-          const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
-          if (!tab?.id) throw new Error('No active tab found.');
+          const [tab] = await chrome.tabs.query({
+            active: true,
+            currentWindow: true,
+          });
+          if (!tab?.id) throw new Error("No active tab found.");
           const ready = await ensureReadyForIssueCreation(tab);
           if (!ready) {
-            sendResponse({ success: false, error: 'Not ready for issue creation.' });
+            sendResponse({
+              success: false,
+              error: "Not ready for issue creation.",
+            });
             break;
           }
-          const context = await requestContextFromTab(tab.id);
-          if (context?.error) throw new Error(context.error);
-
-          let screenshot = null;
-          let screenshotError = null;
-          try {
-            const screenshotResult = await captureElementScreenshot(tab.id, tab.windowId, null);
-            if (screenshotResult && typeof screenshotResult === 'object' && 'error' in screenshotResult) {
-              screenshotError = screenshotResult.error;
-            } else {
-              screenshot = screenshotResult;
-            }
-          } catch (error) {
-            screenshotError = error.message || 'Unknown screenshot capture error';
-          }
-
-          await ensureContentScript(tab.id);
-          const payload = await buildIssueModalPayload(context, screenshot, screenshotError);
-          await chrome.tabs.sendMessage(tab.id, { type: 'showIssueModal', payload });
+          await startPageIssueFlowForTab(tab);
           sendResponse({ success: true });
         } catch (error) {
-          sendResponse({ success: false, error: error.message || 'Unable to start page issue flow.' });
+          sendResponse({
+            success: false,
+            error: error.message || "Unable to start page issue flow.",
+          });
         }
         break;
       }
-      case 'getAuthState': {
+      case "getAuthState": {
         const token = await getStoredToken();
         sendResponse({
           success: true,
-          authenticated: Boolean(token)
+          authenticated: Boolean(token),
         });
         break;
       }
-      case 'startDeviceFlow': {
+      case "startDeviceFlow": {
         try {
-          const result = await startDeviceFlow(message.scopes || 'repo');
+          const result = await startDeviceFlow(message.scopes || "repo");
           sendResponse({ success: true, ...result });
         } catch (error) {
-          console.error('Device flow failed', error);
-          sendResponse({ success: false, error: error.message || 'Device flow failed' });
+          console.error("Device flow failed", error);
+          sendResponse({
+            success: false,
+            error: error.message || "Device flow failed",
+          });
         }
         break;
       }
-      case 'pollDeviceToken': {
+      case "pollDeviceToken": {
         try {
-          const result = await pollForDeviceToken(message.deviceCode, message.interval);
+          const result = await pollForDeviceToken(
+            message.deviceCode,
+            message.interval,
+          );
           sendResponse({ success: true, ...result });
         } catch (error) {
-          console.error('Token polling failed', error);
-          sendResponse({ success: false, error: error.message || 'Token polling failed' });
+          console.error("Token polling failed", error);
+          sendResponse({
+            success: false,
+            error: error.message || "Token polling failed",
+          });
         }
         break;
       }
-      case 'fetchRepos': {
+      case "fetchRepos": {
         try {
           const repos = await fetchUserRepos();
           sendResponse({ success: true, repos });
         } catch (error) {
-          console.error('Failed to fetch repos', error);
-          sendResponse({ success: false, error: error.message || 'Failed to fetch repositories' });
+          console.error("Failed to fetch repos", error);
+          sendResponse({
+            success: false,
+            error: error.message || "Failed to fetch repositories",
+          });
         }
         break;
       }
-      case 'getMilestones': {
+      case "getMilestones": {
         try {
           const milestones = await fetchRepoMilestones();
           sendResponse({ success: true, milestones });
         } catch (error) {
-          console.error('Failed to fetch milestones', error);
-          sendResponse({ success: false, error: error.message || 'Failed to fetch milestones' });
+          console.error("Failed to fetch milestones", error);
+          sendResponse({
+            success: false,
+            error: error.message || "Failed to fetch milestones",
+          });
         }
         break;
       }
-      case 'getProjects': {
+      case "getProjects": {
         try {
           const projects = await fetchRepoProjects();
           sendResponse({ success: true, projects });
         } catch (error) {
-          console.error('Failed to fetch projects', error);
-          sendResponse({ success: false, error: error.message || 'Failed to fetch projects' });
+          console.error("Failed to fetch projects", error);
+          sendResponse({
+            success: false,
+            error: error.message || "Failed to fetch projects",
+          });
         }
         break;
       }
-      case 'getProjectColumns': {
+      case "getProjectColumns": {
         try {
-          if (typeof message.projectId !== 'string') {
-            throw new Error('Project id is required to load columns.');
+          if (typeof message.projectId !== "string") {
+            throw new Error("Project id is required to load columns.");
           }
           const columns = await fetchProjectColumns(message.projectId);
           sendResponse({ success: true, columns });
         } catch (error) {
-          console.error('Failed to fetch project columns', error);
-          sendResponse({ success: false, error: error.message || 'Failed to fetch project columns' });
+          console.error("Failed to fetch project columns", error);
+          sendResponse({
+            success: false,
+            error: error.message || "Failed to fetch project columns",
+          });
         }
         break;
       }
-      case 'getSelectionPreferences': {
+      case "getSelectionPreferences": {
         try {
           const preferences = await getSelectionPreferences();
           sendResponse({ success: true, preferences });
         } catch (error) {
-          console.error('Failed to load selection preferences', error);
-          sendResponse({ success: false, error: error.message || 'Failed to load preferences' });
+          console.error("Failed to load selection preferences", error);
+          sendResponse({
+            success: false,
+            error: error.message || "Failed to load preferences",
+          });
         }
         break;
       }
-      case 'saveSelectionPreferences': {
+      case "saveSelectionPreferences": {
         try {
           await saveSelectionPreferences(message.preferences || {});
           sendResponse({ success: true });
         } catch (error) {
-          console.error('Failed to save selection preferences', error);
-          sendResponse({ success: false, error: error.message || 'Failed to save preferences' });
+          console.error("Failed to save selection preferences", error);
+          sendResponse({
+            success: false,
+            error: error.message || "Failed to save preferences",
+          });
         }
         break;
       }
-      case 'signOut': {
+      case "signOut": {
         await clearStoredToken();
         sendResponse({ success: true });
         break;
       }
-      case 'createIssue': {
+      case "createIssue": {
         try {
           const result = await createIssue(message.payload);
-          sendResponse({ 
-            success: true, 
+          sendResponse({
+            success: true,
             issue: result,
-            screenshotAttached: result.screenshotAttached || false
+            screenshotAttached: result.screenshotAttached || false,
           });
         } catch (error) {
-          console.error('Issue creation failed', error);
-          sendResponse({ success: false, error: error.message || 'Issue creation failed' });
+          console.error("Issue creation failed", error);
+          sendResponse({
+            success: false,
+            error: error.message || "Issue creation failed",
+          });
         }
         break;
       }
-      case 'getLastContext': {
+      case "getLastContext": {
         const data = await chrome.storage.local.get(LAST_CONTEXT_KEY);
-        sendResponse({ success: true, context: data?.[LAST_CONTEXT_KEY] || null });
+        sendResponse({
+          success: true,
+          context: data?.[LAST_CONTEXT_KEY] || null,
+        });
         break;
       }
-      case 'clearLastContext': {
+      case "clearLastContext": {
         await chrome.storage.local.remove(LAST_CONTEXT_KEY);
         sendResponse({ success: true });
         break;
       }
-      case 'getLastIssue': {
+      case "getLastIssue": {
         const data = await chrome.storage.local.get(LAST_ISSUE_KEY);
         sendResponse({ success: true, issue: data?.[LAST_ISSUE_KEY] || null });
         break;
       }
-      case 'liveSelectComplete': {
+      case "liveSelectComplete": {
         const tabId = sender?.tab?.id;
         if (!tabId) {
-          sendResponse({ success: false, error: 'Missing tab context for live select.' });
+          sendResponse({
+            success: false,
+            error: "Missing tab context for live select.",
+          });
           break;
         }
 
         const context = message.context || null;
         if (!context) {
-          sendResponse({ success: false, error: 'No context captured from selection.' });
+          sendResponse({
+            success: false,
+            error: "No context captured from selection.",
+          });
           break;
         }
 
@@ -431,16 +553,24 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
         let screenshot = null;
         let screenshotError = null;
         try {
-          const screenshotResult = await captureElementScreenshot(tabId, sender.tab.windowId, message.selection || null);
-          if (screenshotResult && typeof screenshotResult === 'object' && 'error' in screenshotResult) {
+          const screenshotResult = await captureElementScreenshot(
+            tabId,
+            sender.tab.windowId,
+            message.selection || null,
+          );
+          if (
+            screenshotResult &&
+            typeof screenshotResult === "object" &&
+            "error" in screenshotResult
+          ) {
             screenshotError = screenshotResult.error;
-            console.warn('Screenshot capture error:', screenshotError);
+            console.warn("Screenshot capture error:", screenshotError);
           } else if (screenshotResult) {
             screenshot = screenshotResult;
           }
         } catch (error) {
-          screenshotError = error.message || 'Unknown screenshot capture error';
-          console.warn('Unable to capture screenshot for selection', error);
+          screenshotError = error.message || "Unknown screenshot capture error";
+          console.warn("Unable to capture screenshot for selection", error);
         }
 
         try {
@@ -449,25 +579,28 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
             payload.screenshotError = screenshotError;
           }
           await chrome.tabs.sendMessage(tabId, {
-            type: 'showIssueModal',
+            type: "showIssueModal",
             payload,
-            fromLiveSelect: true
+            fromLiveSelect: true,
           });
         } catch (error) {
-          console.error('Failed to show issue modal after live select', error);
-          sendResponse({ success: false, error: error.message || 'Failed to open issue modal.' });
+          console.error("Failed to show issue modal after live select", error);
+          sendResponse({
+            success: false,
+            error: error.message || "Failed to open issue modal.",
+          });
           break;
         }
 
-        sendResponse({ 
-          success: true, 
+        sendResponse({
+          success: true,
           screenshotCaptured: Boolean(screenshot),
-          screenshotError: screenshotError || null
+          screenshotError: screenshotError || null,
         });
         break;
       }
       default:
-        sendResponse({ success: false, error: 'Unknown message type' });
+        sendResponse({ success: false, error: "Unknown message type" });
     }
   })();
   return true;
@@ -483,12 +616,12 @@ async function ensureContextMenu() {
   try {
     chrome.contextMenus.create({
       id: CONTEXT_MENU_ID,
-      title: 'Create GitHub Issue from Page/Selection',
-      contexts: ['page', 'selection'],
-      documentUrlPatterns: ['<all_urls>']
+      title: "Create GitHub Issue from Page/Selection",
+      contexts: ["page", "selection"],
+      documentUrlPatterns: ["<all_urls>"],
     });
   } catch (error) {
-    console.error('Unable to create context menu', error);
+    console.error("Unable to create context menu", error);
   }
 }
 
@@ -496,9 +629,9 @@ async function seedDefaultConfig() {
   const existing = await chrome.storage.sync.get(CONFIG_KEY);
   if (!existing || !existing[CONFIG_KEY]) {
     const config = {
-      owner: '',
-      repo: '',
-      labels: []
+      owner: "",
+      repo: "",
+      labels: [],
     };
     await chrome.storage.sync.set({ [CONFIG_KEY]: config });
   }
@@ -510,17 +643,17 @@ async function getRepoConfig() {
     return data[CONFIG_KEY];
   }
   return {
-    owner: '',
-    repo: '',
-    labels: []
+    owner: "",
+    repo: "",
+    labels: [],
   };
 }
 
 async function saveRepoConfig(config = {}) {
   const sanitized = {
-    owner: config.owner || '',
-    repo: config.repo || '',
-    labels: Array.isArray(config.labels) ? config.labels.filter(Boolean) : []
+    owner: config.owner || "",
+    repo: config.repo || "",
+    labels: Array.isArray(config.labels) ? config.labels.filter(Boolean) : [],
   };
   await chrome.storage.sync.set({ [CONFIG_KEY]: sanitized });
 }
@@ -542,72 +675,74 @@ async function clearStoredToken() {
   await chrome.storage.sync.remove(TOKEN_KEY);
 }
 
-async function startDeviceFlow(scopes = 'repo') {
+async function startDeviceFlow(scopes = "repo") {
   try {
-    const storedConfig = await chrome.storage.sync.get('oauth_config');
+    const storedConfig = await chrome.storage.sync.get("oauth_config");
     const configuredClientId = storedConfig?.oauth_config?.clientId;
     const clientId = configuredClientId || DEFAULT_DEVICE_FLOW_CLIENT_ID;
-    
+
     if (!clientId) {
       throw new Error(
-        'GitHub OAuth Client ID missing. Please configure it in the extension settings.'
+        "GitHub OAuth Client ID missing. Please configure it in the extension settings.",
       );
     }
-    
+
     // Step 1: Request device and user codes
     const deviceCodeResponse = await fetch(GITHUB_DEVICE_CODE_URL, {
-      method: 'POST',
+      method: "POST",
       headers: {
-        Accept: 'application/json',
-        'Content-Type': 'application/x-www-form-urlencoded'
+        Accept: "application/json",
+        "Content-Type": "application/x-www-form-urlencoded",
       },
       body: new URLSearchParams({
         client_id: clientId,
-        scope: scopes
-      })
+        scope: scopes,
+      }),
     });
-    
+
     if (!deviceCodeResponse.ok) {
       const errorData = await safeParseJson(deviceCodeResponse);
-      
+
       // Provide helpful error message for 404 (most common issue)
       if (deviceCodeResponse.status === 404) {
-        const setupUrl = 'https://github.com/settings/developers';
+        const setupUrl = "https://github.com/settings/developers";
         throw new Error(
           `OAuth App not configured correctly!\n\n` +
-          `Common causes:\n` +
-          `1. The Client ID is incorrect\n` +
-          `2. The OAuth App doesn't exist\n\n` +
-          `To fix:\n` +
-          `1. Go to ${setupUrl}\n` +
-          `2. Open your OAuth App settings\n` +
-          `3. Update Client ID in the extension options\n` +
-          `4. Reload the extension\n\n` +
-          `See INSTALL.md for detailed instructions.`
+            `Common causes:\n` +
+            `1. The Client ID is incorrect\n` +
+            `2. The OAuth App doesn't exist\n\n` +
+            `To fix:\n` +
+            `1. Go to ${setupUrl}\n` +
+            `2. Open your OAuth App settings\n` +
+            `3. Update Client ID in the extension options\n` +
+            `4. Reload the extension\n\n` +
+            `See INSTALL.md for detailed instructions.`,
         );
       }
-      
-      const errorMessage = errorData?.error_description || errorData?.message || 
-                          `Failed to initiate device flow (status: ${deviceCodeResponse.status})`;
+
+      const errorMessage =
+        errorData?.error_description ||
+        errorData?.message ||
+        `Failed to initiate device flow (status: ${deviceCodeResponse.status})`;
       throw new Error(errorMessage);
     }
-    
+
     const deviceData = await deviceCodeResponse.json();
-    
+
     if (deviceData.error) {
       throw new Error(deviceData.error_description || deviceData.error);
     }
-    
+
     // Return device code data to show to user
     return {
       device_code: deviceData.device_code,
       user_code: deviceData.user_code,
       verification_uri: deviceData.verification_uri,
       expires_in: deviceData.expires_in,
-      interval: deviceData.interval || 5
+      interval: deviceData.interval || 5,
     };
   } catch (error) {
-    console.error('Device flow initiation failed:', error);
+    console.error("Device flow initiation failed:", error);
     throw error;
   }
 }
@@ -615,59 +750,63 @@ async function startDeviceFlow(scopes = 'repo') {
 async function pollForDeviceToken(deviceCode, interval = 5) {
   const maxAttempts = 60; // 5 minutes with 5 second intervals
   let attempts = 0;
-  
-  const storedConfig = await chrome.storage.sync.get('oauth_config');
+
+  const storedConfig = await chrome.storage.sync.get("oauth_config");
   const configuredClientId = storedConfig?.oauth_config?.clientId;
   const clientId = configuredClientId || DEFAULT_DEVICE_FLOW_CLIENT_ID;
-  
+
   if (!clientId) {
-    throw new Error('OAuth Client ID not configured');
+    throw new Error("OAuth Client ID not configured");
   }
-  
+
   while (attempts < maxAttempts) {
     await sleep(interval * 1000);
     attempts++;
-    
+
     try {
       const response = await fetch(GITHUB_ACCESS_TOKEN_URL, {
-        method: 'POST',
+        method: "POST",
         headers: {
-          Accept: 'application/json',
-          'Content-Type': 'application/x-www-form-urlencoded'
+          Accept: "application/json",
+          "Content-Type": "application/x-www-form-urlencoded",
         },
         body: new URLSearchParams({
           client_id: clientId,
           device_code: deviceCode,
-          grant_type: 'urn:ietf:params:oauth:grant-type:device_code'
-        })
+          grant_type: "urn:ietf:params:oauth:grant-type:device_code",
+        }),
       });
-      
+
       const data = await safeParseJson(response);
-      
+
       if (!response.ok && !data) {
         // Network or parsing error - continue polling
-        console.warn('Token request failed, retrying...', response.status);
+        console.warn("Token request failed, retrying...", response.status);
         continue;
       }
-      
+
       if (data && data.error) {
         // Check for specific error types
-        if (data.error === 'authorization_pending') {
+        if (data.error === "authorization_pending") {
           // User hasn't completed authorization yet, continue polling
           continue;
-        } else if (data.error === 'slow_down') {
+        } else if (data.error === "slow_down") {
           // GitHub is asking us to slow down, increase interval
           interval += 5;
           continue;
-        } else if (data.error === 'expired_token') {
-          throw new Error('The device code has expired. Please try signing in again.');
-        } else if (data.error === 'access_denied') {
-          throw new Error('Authorization was denied. Please try again if this was a mistake.');
+        } else if (data.error === "expired_token") {
+          throw new Error(
+            "The device code has expired. Please try signing in again.",
+          );
+        } else if (data.error === "access_denied") {
+          throw new Error(
+            "Authorization was denied. Please try again if this was a mistake.",
+          );
         } else {
           throw new Error(data.error_description || data.error);
         }
       }
-      
+
       if (data && data.access_token) {
         // Success! Save the token
         await saveToken(data.access_token);
@@ -675,66 +814,76 @@ async function pollForDeviceToken(deviceCode, interval = 5) {
       }
     } catch (error) {
       // If it's a known error (expired, denied, etc.), throw it immediately
-      if (error.message && (
-        error.message.includes('expired') ||
-        error.message.includes('denied') ||
-        error.message.includes('error_description')
-      )) {
+      if (
+        error.message &&
+        (error.message.includes("expired") ||
+          error.message.includes("denied") ||
+          error.message.includes("error_description"))
+      ) {
         throw error;
       }
-      
+
       // For other errors, continue polling unless we've hit max attempts
       if (attempts >= maxAttempts) {
-        throw new Error('Timeout waiting for authorization. Please try again.');
+        throw new Error("Timeout waiting for authorization. Please try again.");
       }
-      console.warn('Polling attempt failed, retrying...', error.message);
+      console.warn("Polling attempt failed, retrying...", error.message);
     }
   }
-  
-  throw new Error('Timeout waiting for authorization. Please try again.');
+
+  throw new Error("Timeout waiting for authorization. Please try again.");
 }
 
 function sleep(ms) {
-  return new Promise(resolve => setTimeout(resolve, ms));
+  return new Promise((resolve) => setTimeout(resolve, ms));
 }
 
 async function fetchUserRepos() {
   const token = await getStoredToken();
   if (!token) {
-    throw new Error('Authentication required.');
+    throw new Error("Authentication required.");
   }
 
   try {
-    const response = await fetch('https://api.github.com/user/repos?per_page=100&sort=updated', {
-      headers: {
-        Authorization: `token ${token}`,
-        Accept: 'application/vnd.github+json',
-        'X-GitHub-Api-Version': '2022-11-28'
+    const response = await fetch(
+      "https://api.github.com/user/repos?per_page=100&sort=updated",
+      {
+        headers: {
+          Authorization: `token ${token}`,
+          Accept: "application/vnd.github+json",
+          "X-GitHub-Api-Version": "2022-11-28",
+        },
+      },
+    );
+
+    if (!response.ok) {
+      if (response.status === 401) {
+        await clearStoredToken();
+        throw new Error(
+          "Authentication expired. Please sign in again from the extension options.",
+        );
       }
-    });
-    
-  if (!response.ok) {
-    if (response.status === 401) {
-      await clearStoredToken();
-      throw new Error('Authentication expired. Please sign in again from the extension options.');
+      if (response.status === 403) {
+        throw new Error(
+          "Access denied. Please check your GitHub token permissions.",
+        );
+      }
+      throw new Error(
+        `Failed to fetch repositories (HTTP ${response.status}). Please try again later.`,
+      );
     }
-    if (response.status === 403) {
-      throw new Error('Access denied. Please check your GitHub token permissions.');
-    }
-    throw new Error(`Failed to fetch repositories (HTTP ${response.status}). Please try again later.`);
-  }
-    
+
     const repos = await response.json();
-    return repos.map(repo => ({
+    return repos.map((repo) => ({
       id: repo.id,
       name: repo.name,
       full_name: repo.full_name,
       owner: repo.owner.login,
       private: repo.private,
-      permissions: repo.permissions
+      permissions: repo.permissions,
     }));
   } catch (error) {
-    console.error('Error fetching repos:', error);
+    console.error("Error fetching repos:", error);
     throw error;
   }
 }
@@ -742,84 +891,116 @@ async function fetchUserRepos() {
 async function createIssue(payload = {}) {
   const token = await getStoredToken();
   if (!token) {
-    throw new Error('Authentication required. Please sign in with GitHub.');
+    throw new Error("Authentication required. Please sign in with GitHub.");
   }
 
   const { owner, repo, labels } = await getRepoConfig();
   if (!owner || !repo) {
-    throw new Error('Repository configuration is incomplete. Please configure owner and repo in settings.');
+    throw new Error(
+      "Repository configuration is incomplete. Please configure owner and repo in settings.",
+    );
   }
 
   const userInput = {
-    title: payload.title?.trim() || '',
-    description: payload.description?.trim() || ''
+    title: payload.title?.trim() || "",
+    description: payload.description?.trim() || "",
   };
 
   const context = payload.context || {};
-  const screenshotDataUrl = typeof payload.screenshotDataUrl === 'string' ? payload.screenshotDataUrl : null;
-  const screenshotId = typeof payload.screenshotId === 'string' ? payload.screenshotId : null;
-  const milestoneNumber = typeof payload.milestoneNumber === 'number' ? payload.milestoneNumber : null;
-  const projectId = typeof payload.projectId === 'string' ? payload.projectId : null;
-  const projectFieldId = typeof payload.projectFieldId === 'string' ? payload.projectFieldId : null;
-  const projectOptionId = typeof payload.projectOptionId === 'string' ? payload.projectOptionId : null;
+  const screenshotDataUrl =
+    typeof payload.screenshotDataUrl === "string"
+      ? payload.screenshotDataUrl
+      : null;
+  const screenshotId =
+    typeof payload.screenshotId === "string" ? payload.screenshotId : null;
+  const milestoneNumber =
+    typeof payload.milestoneNumber === "number"
+      ? payload.milestoneNumber
+      : null;
+  const projectId =
+    typeof payload.projectId === "string" ? payload.projectId : null;
+  const projectFieldId =
+    typeof payload.projectFieldId === "string" ? payload.projectFieldId : null;
+  const projectOptionId =
+    typeof payload.projectOptionId === "string"
+      ? payload.projectOptionId
+      : null;
 
   const sanitized = buildSanitizedIssue(context, userInput);
   let issueBody = sanitized.body;
   const bodySize = sanitized.size;
 
   if (bodySize >= 64 * 1024) {
-    throw new Error(`Issue body is ${Math.round(bodySize / 1024)}KB, which exceeds GitHub's 65KB limit. Please shorten your description or capture a smaller page element.`);
+    throw new Error(
+      `Issue body is ${Math.round(bodySize / 1024)}KB, which exceeds GitHub's 65KB limit. Please shorten your description or capture a smaller page element.`,
+    );
   } else if (bodySize >= 55 * 1024) {
-    console.warn('Issue body approaching GitHub size limit:', bodySize);
+    console.warn("Issue body approaching GitHub size limit:", bodySize);
   }
 
-  const requestLabels = Array.isArray(payload.labels) ? payload.labels : labels || [];
+  const requestLabels = Array.isArray(payload.labels)
+    ? payload.labels
+    : labels || [];
 
   if (!sanitized.title) {
-    throw new Error('Issue title is required.');
+    throw new Error("Issue title is required.");
   }
 
-  const response = await fetch(`https://api.github.com/repos/${owner}/${repo}/issues`, {
-    method: 'POST',
-    headers: {
-      Authorization: `token ${token}`,
-      Accept: 'application/vnd.github+json',
-      'Content-Type': 'application/json',
-      'X-GitHub-Api-Version': '2022-11-28'
+  const response = await fetch(
+    `https://api.github.com/repos/${owner}/${repo}/issues`,
+    {
+      method: "POST",
+      headers: {
+        Authorization: `token ${token}`,
+        Accept: "application/vnd.github+json",
+        "Content-Type": "application/json",
+        "X-GitHub-Api-Version": "2022-11-28",
+      },
+      body: JSON.stringify({
+        title: sanitized.title,
+        body: issueBody,
+        labels: requestLabels,
+        milestone: milestoneNumber || undefined,
+      }),
     },
-    body: JSON.stringify({
-      title: sanitized.title,
-      body: issueBody,
-      labels: requestLabels,
-      milestone: milestoneNumber || undefined
-    })
-  });
+  );
 
   if (response.status === 401 || response.status === 403) {
-    const remaining = response.headers.get('X-RateLimit-Remaining');
-    if (remaining === '0') {
-      throw new Error('GitHub rate limit exceeded. Please wait a few minutes and try again.');
+    const remaining = response.headers.get("X-RateLimit-Remaining");
+    if (remaining === "0") {
+      throw new Error(
+        "GitHub rate limit exceeded. Please wait a few minutes and try again.",
+      );
     }
     if (response.status === 401) {
       await clearStoredToken();
-      throw new Error('Authentication expired. Please sign in again from the extension options.');
+      throw new Error(
+        "Authentication expired. Please sign in again from the extension options.",
+      );
     }
     if (response.status === 403) {
-      throw new Error('Access denied. Please check that your GitHub token has permission to create issues in this repository.');
+      throw new Error(
+        "Access denied. Please check that your GitHub token has permission to create issues in this repository.",
+      );
     }
   }
 
   if (!response.ok) {
     const errorBody = await safeParseJson(response);
-    const errorMsg = errorBody?.message || `GitHub API error (HTTP ${response.status})`;
-    
+    const errorMsg =
+      errorBody?.message || `GitHub API error (HTTP ${response.status})`;
+
     // Provide more helpful error messages
-    if (errorMsg.includes('not found')) {
-      throw new Error('Repository not found. Please check that the repository name and owner are correct in extension options.');
-    } else if (errorMsg.includes('permission')) {
-      throw new Error('Permission denied. Please ensure your GitHub token has access to create issues in this repository.');
+    if (errorMsg.includes("not found")) {
+      throw new Error(
+        "Repository not found. Please check that the repository name and owner are correct in extension options.",
+      );
+    } else if (errorMsg.includes("permission")) {
+      throw new Error(
+        "Permission denied. Please ensure your GitHub token has access to create issues in this repository.",
+      );
     }
-    
+
     throw new Error(errorMsg);
   }
 
@@ -832,10 +1013,10 @@ async function createIssue(payload = {}) {
         projectId,
         contentNodeId: issue.node_id,
         statusFieldId: projectFieldId,
-        statusOptionId: projectOptionId
+        statusOptionId: projectOptionId,
       });
     } catch (error) {
-      console.warn('Failed to add issue to project', error);
+      console.warn("Failed to add issue to project", error);
     }
   }
 
@@ -848,17 +1029,18 @@ async function createIssue(payload = {}) {
         const cached = takeScreenshotBlob(screenshotId);
         blob = cached?.blob || null;
         if (!blob) {
-          throw new Error('Screenshot expired. Please capture again.');
+          throw new Error("Screenshot expired. Please capture again.");
         }
       } else {
         blob = await dataUrlToBlob(screenshotDataUrl);
       }
       if (!blob) {
-        throw new Error('Unable to prepare screenshot for upload');
+        throw new Error("Unable to prepare screenshot for upload");
       }
 
       const attachment = await uploadIssueAttachment({ blob });
-      screenshotAttachmentUrl = attachment?.url || attachment?.download_url || null;
+      screenshotAttachmentUrl =
+        attachment?.url || attachment?.download_url || null;
       if (screenshotAttachmentUrl) {
         const augmentedBody = `${issueBody}\n\n![Screenshot](${screenshotAttachmentUrl})`;
         await patchIssueBody(owner, repo, issue.number, augmentedBody, token);
@@ -866,19 +1048,19 @@ async function createIssue(payload = {}) {
         screenshotAttached = true;
       }
     } catch (error) {
-      console.error('Screenshot upload to R2 failed', error);
-      screenshotUploadError = error.message || 'Unknown upload error';
+      console.error("Screenshot upload to R2 failed", error);
+      screenshotUploadError = error.message || "Unknown upload error";
       // Issue is still created, but without screenshot
       // Don't throw - let issue creation succeed, but notify user
     }
   }
 
-  const summary = { 
-    html_url: issue.html_url, 
-    number: issue.number, 
+  const summary = {
+    html_url: issue.html_url,
+    number: issue.number,
     title: issue.title,
     screenshotAttached,
-    screenshotUploadError: screenshotUploadError || null
+    screenshotUploadError: screenshotUploadError || null,
   };
   await chrome.storage.local.set({ [LAST_ISSUE_KEY]: summary });
 
@@ -887,10 +1069,10 @@ async function createIssue(payload = {}) {
       milestoneNumber,
       projectId,
       statusFieldId: projectFieldId,
-      statusOptionId: projectOptionId
+      statusOptionId: projectOptionId,
     });
   } catch (error) {
-    console.debug('Unable to persist selection preferences', error);
+    console.debug("Unable to persist selection preferences", error);
   }
 
   return summary;
@@ -900,14 +1082,20 @@ async function ensureReadyForIssueCreation(tab) {
   const token = await getStoredToken();
   const config = await getRepoConfig();
 
-  const isConfigured = Boolean(token) && Boolean(config.owner) && Boolean(config.repo);
+  const isConfigured =
+    Boolean(token) && Boolean(config.owner) && Boolean(config.repo);
   if (!isConfigured) {
     await chrome.runtime.openOptionsPage();
     return false;
   }
 
-  if (tab?.url && UNSUPPORTED_URL_PREFIXES.some(prefix => tab.url.startsWith(prefix))) {
-    throw new Error('This extension is not available on browser internal pages (chrome://, chrome-extension://, etc.). Please use it on a regular web page.');
+  if (
+    tab?.url &&
+    UNSUPPORTED_URL_PREFIXES.some((prefix) => tab.url.startsWith(prefix))
+  ) {
+    throw new Error(
+      "This extension is not available on browser internal pages (chrome://, chrome-extension://, etc.). Please use it on a regular web page.",
+    );
   }
 
   return true;
@@ -916,7 +1104,7 @@ async function ensureReadyForIssueCreation(tab) {
 async function ensureContentScript(tabId) {
   // First, try to ping existing content script
   try {
-    const ping = await chrome.tabs.sendMessage(tabId, { type: 'ping' });
+    const ping = await chrome.tabs.sendMessage(tabId, { type: "ping" });
     if (ping?.success) {
       return;
     }
@@ -928,23 +1116,25 @@ async function ensureContentScript(tabId) {
   try {
     await chrome.scripting.executeScript({
       target: { tabId },
-      files: ['content.js']
+      files: ["content.js"],
     });
   } catch (error) {
-    console.error('Failed to inject content script', error);
-    throw new Error('Unable to inject content script. The page may not support extensions.');
+    console.error("Failed to inject content script", error);
+    throw new Error(
+      "Unable to inject content script. The page may not support extensions.",
+    );
   }
 
   // Wait for content script to initialize with exponential backoff
   const maxRetries = 3;
   const baseDelay = 100; // Start with 100ms
-  
+
   for (let attempt = 0; attempt < maxRetries; attempt++) {
     const delay = baseDelay * Math.pow(2, attempt); // 100ms, 200ms, 400ms
     await sleep(delay);
 
     try {
-      const ping = await chrome.tabs.sendMessage(tabId, { type: 'ping' });
+      const ping = await chrome.tabs.sendMessage(tabId, { type: "ping" });
       if (ping?.success) {
         return; // Success!
       }
@@ -952,17 +1142,23 @@ async function ensureContentScript(tabId) {
       // Not ready yet, continue to next attempt
       if (attempt === maxRetries - 1) {
         // Last attempt failed
-        console.error('Content script did not respond after retries', error);
-        throw new Error('Content script initialization failed. The page may not support extensions or may be loading. Please try again.');
+        console.error("Content script did not respond after retries", error);
+        throw new Error(
+          "Content script initialization failed. The page may not support extensions or may be loading. Please try again.",
+        );
       }
     }
   }
 
   // Should not reach here, but just in case
-  throw new Error('Content script initialization timeout. Please try again.');
+  throw new Error("Content script initialization timeout. Please try again.");
 }
 
-async function buildIssueModalPayload(context, screenshot, screenshotError = null) {
+async function buildIssueModalPayload(
+  context,
+  screenshot,
+  screenshotError = null,
+) {
   const config = await getRepoConfig();
   const preferences = await getSelectionPreferences();
   const lastIssueData = await chrome.storage.local.get(LAST_ISSUE_KEY);
@@ -972,63 +1168,76 @@ async function buildIssueModalPayload(context, screenshot, screenshotError = nul
     screenshotId: screenshot?.screenshotId || null,
     screenshotPreviewDataUrl: screenshot?.previewDataUrl || null,
     screenshotError,
-    repo: config?.owner && config?.repo
-      ? { owner: config.owner, name: config.repo }
-      : null,
+    repo:
+      config?.owner && config?.repo
+        ? { owner: config.owner, name: config.repo }
+        : null,
     preferences,
-    lastIssue: lastIssueData?.[LAST_ISSUE_KEY] || null
+    lastIssue: lastIssueData?.[LAST_ISSUE_KEY] || null,
   };
 }
 
 async function captureElementScreenshot(tabId, windowId, selection) {
   let baseDataUrl;
   let captureError = null;
-  
+
   try {
-    baseDataUrl = await chrome.tabs.captureVisibleTab(windowId, { format: 'png' });
+    baseDataUrl = await chrome.tabs.captureVisibleTab(windowId, {
+      format: "png",
+    });
   } catch (error) {
     captureError = error;
-    console.warn('captureVisibleTab failed', error);
+    console.warn("captureVisibleTab failed", error);
     // If captureVisibleTab fails, try alternative: get tab and capture
     try {
       const tab = await chrome.tabs.get(tabId);
       if (tab?.windowId) {
-        baseDataUrl = await chrome.tabs.captureVisibleTab(tab.windowId, { format: 'png' });
+        baseDataUrl = await chrome.tabs.captureVisibleTab(tab.windowId, {
+          format: "png",
+        });
         captureError = null; // Success on fallback
       } else {
-        return { error: 'Unable to capture screenshot: Tab window not available' };
+        return {
+          error: "Unable to capture screenshot: Tab window not available",
+        };
       }
     } catch (fallbackError) {
-      console.warn('Fallback screenshot capture also failed', fallbackError);
-      return { error: 'Unable to capture screenshot: Both primary and fallback methods failed' };
+      console.warn("Fallback screenshot capture also failed", fallbackError);
+      return {
+        error:
+          "Unable to capture screenshot: Both primary and fallback methods failed",
+      };
     }
   }
 
   if (captureError || !baseDataUrl) {
-    return { error: captureError?.message || 'Screenshot capture failed' };
+    return { error: captureError?.message || "Screenshot capture failed" };
   }
 
   // If no selection provided, compress and return full page screenshot
   if (!selection?.rect) {
     const result = await compressFullPageScreenshot(baseDataUrl);
     if (!result) {
-      return { error: 'Failed to process full page screenshot' };
+      return { error: "Failed to process full page screenshot" };
     }
     return result;
   }
 
   const { rect, devicePixelRatio } = selection;
-  const scale = Number.isFinite(devicePixelRatio) && devicePixelRatio > 0 ? devicePixelRatio : 1;
+  const scale =
+    Number.isFinite(devicePixelRatio) && devicePixelRatio > 0
+      ? devicePixelRatio
+      : 1;
   const cropWidth = Math.max(1, Math.round(rect.width * scale));
   const cropHeight = Math.max(1, Math.round(rect.height * scale));
 
   if (cropWidth < 2 || cropHeight < 2) {
     // Too small to crop, return full screenshot
     const result = await compressFullPageScreenshot(baseDataUrl);
-    if (result && typeof result === 'object' && 'error' in result) {
+    if (result && typeof result === "object" && "error" in result) {
       return result;
     }
-    return result || { error: 'Failed to process screenshot' };
+    return result || { error: "Failed to process screenshot" };
   }
 
   try {
@@ -1038,41 +1247,68 @@ async function captureElementScreenshot(tabId, windowId, selection) {
 
     let outputWidth = cropWidth;
     let outputHeight = cropHeight;
-    if (outputWidth > MAX_OUTPUT_DIMENSION || outputHeight > MAX_OUTPUT_DIMENSION) {
+    if (
+      outputWidth > MAX_OUTPUT_DIMENSION ||
+      outputHeight > MAX_OUTPUT_DIMENSION
+    ) {
       const scaleFactor = Math.min(
         MAX_OUTPUT_DIMENSION / outputWidth,
-        MAX_OUTPUT_DIMENSION / outputHeight
+        MAX_OUTPUT_DIMENSION / outputHeight,
       );
       outputWidth = Math.max(1, Math.round(outputWidth * scaleFactor));
       outputHeight = Math.max(1, Math.round(outputHeight * scaleFactor));
     }
 
     const canvas = new OffscreenCanvas(outputWidth, outputHeight);
-    const ctx = canvas.getContext('2d');
-    const sx = Math.max(0, Math.min(bitmap.width - cropWidth, Math.round(rect.left * scale)));
-    const sy = Math.max(0, Math.min(bitmap.height - cropHeight, Math.round(rect.top * scale)));
+    const ctx = canvas.getContext("2d");
+    const sx = Math.max(
+      0,
+      Math.min(bitmap.width - cropWidth, Math.round(rect.left * scale)),
+    );
+    const sy = Math.max(
+      0,
+      Math.min(bitmap.height - cropHeight, Math.round(rect.top * scale)),
+    );
 
-    ctx.drawImage(bitmap, sx, sy, cropWidth, cropHeight, 0, 0, outputWidth, outputHeight);
+    ctx.drawImage(
+      bitmap,
+      sx,
+      sy,
+      cropWidth,
+      cropHeight,
+      0,
+      0,
+      outputWidth,
+      outputHeight,
+    );
     // Quality levels for R2 upload
     const qualityLevels = [0.9, 0.85, 0.8, 0.75];
     let croppedBlob = null;
 
     for (const quality of qualityLevels) {
-      const blobCandidate = await canvas.convertToBlob({ type: 'image/jpeg', quality });
-      if (blobCandidate.size <= MAX_SCREENSHOT_BYTES || quality === qualityLevels[qualityLevels.length - 1]) {
+      const blobCandidate = await canvas.convertToBlob({
+        type: "image/jpeg",
+        quality,
+      });
+      if (
+        blobCandidate.size <= MAX_SCREENSHOT_BYTES ||
+        quality === qualityLevels[qualityLevels.length - 1]
+      ) {
         croppedBlob = blobCandidate;
         break;
       }
     }
 
     if (!croppedBlob) {
-      return { error: 'Failed to process screenshot: Unable to create image blob' };
+      return {
+        error: "Failed to process screenshot: Unable to create image blob",
+      };
     }
     const previewDataUrl = await createScreenshotPreviewDataUrl(croppedBlob);
     const screenshotId = storeScreenshotBlob(croppedBlob, previewDataUrl);
     return { screenshotId, previewDataUrl };
   } catch (error) {
-    console.warn('Unable to crop screenshot to selection', error);
+    console.warn("Unable to crop screenshot to selection", error);
     return { error: `Failed to process screenshot: ${error.message}` };
   }
 }
@@ -1087,47 +1323,56 @@ async function compressFullPageScreenshot(dataUrl) {
     // Use same max dimension as element screenshots for consistency
     let outputWidth = bitmap.width;
     let outputHeight = bitmap.height;
-    
-    if (outputWidth > MAX_OUTPUT_DIMENSION || outputHeight > MAX_OUTPUT_DIMENSION) {
+
+    if (
+      outputWidth > MAX_OUTPUT_DIMENSION ||
+      outputHeight > MAX_OUTPUT_DIMENSION
+    ) {
       const scaleFactor = Math.min(
         MAX_OUTPUT_DIMENSION / outputWidth,
-        MAX_OUTPUT_DIMENSION / outputHeight
+        MAX_OUTPUT_DIMENSION / outputHeight,
       );
       outputWidth = Math.max(1, Math.round(outputWidth * scaleFactor));
       outputHeight = Math.max(1, Math.round(outputHeight * scaleFactor));
     }
 
     const canvas = new OffscreenCanvas(outputWidth, outputHeight);
-    const ctx = canvas.getContext('2d');
+    const ctx = canvas.getContext("2d");
     ctx.drawImage(bitmap, 0, 0, outputWidth, outputHeight);
-    
+
     // Quality levels for R2 upload
     const qualityLevels = [0.9, 0.85, 0.8, 0.75];
     let croppedBlob = null;
 
     for (const quality of qualityLevels) {
-      const blobCandidate = await canvas.convertToBlob({ type: 'image/jpeg', quality });
+      const blobCandidate = await canvas.convertToBlob({
+        type: "image/jpeg",
+        quality,
+      });
       // R2 can handle larger files, but we'll still cap at 10MB for performance
-      if (blobCandidate.size <= MAX_SCREENSHOT_BYTES || quality === qualityLevels[qualityLevels.length - 1]) {
+      if (
+        blobCandidate.size <= MAX_SCREENSHOT_BYTES ||
+        quality === qualityLevels[qualityLevels.length - 1]
+      ) {
         croppedBlob = blobCandidate;
         break;
       }
     }
 
     if (!croppedBlob) {
-      return { error: 'Failed to compress full page screenshot' };
+      return { error: "Failed to compress full page screenshot" };
     }
-    
+
     // R2 can handle larger files, so we don't strictly enforce size limits
     if (croppedBlob.size > MAX_SCREENSHOT_BYTES) {
-      console.warn('Full page screenshot is large but will be uploaded to R2');
+      console.warn("Full page screenshot is large but will be uploaded to R2");
     }
 
     const previewDataUrl = await createScreenshotPreviewDataUrl(croppedBlob);
     const screenshotId = storeScreenshotBlob(croppedBlob, previewDataUrl);
     return { screenshotId, previewDataUrl };
   } catch (error) {
-    console.warn('Unable to compress full page screenshot', error);
+    console.warn("Unable to compress full page screenshot", error);
     return { error: `Failed to compress screenshot: ${error.message}` };
   }
 }
@@ -1135,7 +1380,7 @@ async function compressFullPageScreenshot(dataUrl) {
 function arrayBufferToBase64(buffer) {
   const bytes = new Uint8Array(buffer);
   const chunkSize = 0x8000;
-  let binary = '';
+  let binary = "";
   for (let i = 0; i < bytes.length; i += chunkSize) {
     const chunk = bytes.subarray(i, i + chunkSize);
     binary += String.fromCharCode(...chunk);
@@ -1166,15 +1411,20 @@ async function createScreenshotPreviewDataUrl(blob) {
       outputHeight = Math.max(1, Math.round(outputHeight * scale));
     }
     const canvas = new OffscreenCanvas(outputWidth, outputHeight);
-    const ctx = canvas.getContext('2d');
+    const ctx = canvas.getContext("2d");
     ctx.drawImage(bitmap, 0, 0, outputWidth, outputHeight);
-    const previewBlob = await canvas.convertToBlob({ type: 'image/jpeg', quality: 0.7 });
+    const previewBlob = await canvas.convertToBlob({
+      type: "image/jpeg",
+      quality: 0.7,
+    });
     const buffer = await previewBlob.arrayBuffer();
     const base64 = arrayBufferToBase64(buffer);
     const dataUrl = `data:image/jpeg;base64,${base64}`;
-    return dataUrl.length <= MAX_SCREENSHOT_PREVIEW_DATA_URL_LENGTH ? dataUrl : null;
+    return dataUrl.length <= MAX_SCREENSHOT_PREVIEW_DATA_URL_LENGTH
+      ? dataUrl
+      : null;
   } catch (error) {
-    console.debug('Unable to create screenshot preview', error);
+    console.debug("Unable to create screenshot preview", error);
     return null;
   }
 }
@@ -1186,40 +1436,43 @@ async function addIssueToProjectColumn(columnId, issueId) {
   }
 
   await fetch(`https://api.github.com/projects/columns/${columnId}/cards`, {
-    method: 'POST',
+    method: "POST",
     headers: {
       Authorization: `token ${token}`,
-      Accept: 'application/vnd.github.inertia-preview+json',
-      'Content-Type': 'application/json'
+      Accept: "application/vnd.github.inertia-preview+json",
+      "Content-Type": "application/json",
     },
     body: JSON.stringify({
       content_id: issueId,
-      content_type: 'Issue'
-    })
+      content_type: "Issue",
+    }),
   });
 }
 
 async function fetchRepoMilestones() {
   const token = await getStoredToken();
   if (!token) {
-    throw new Error('Authentication required.');
+    throw new Error("Authentication required.");
   }
   const { owner, repo } = await getRepoConfig();
   if (!owner || !repo) {
-    throw new Error('Repository not configured.');
+    throw new Error("Repository not configured.");
   }
 
-  const response = await fetch(`https://api.github.com/repos/${owner}/${repo}/milestones?state=open&direction=asc`, {
-    headers: {
-      Authorization: `token ${token}`,
-      Accept: 'application/vnd.github+json',
-      'X-GitHub-Api-Version': '2022-11-28'
-    }
-  });
+  const response = await fetch(
+    `https://api.github.com/repos/${owner}/${repo}/milestones?state=open&direction=asc`,
+    {
+      headers: {
+        Authorization: `token ${token}`,
+        Accept: "application/vnd.github+json",
+        "X-GitHub-Api-Version": "2022-11-28",
+      },
+    },
+  );
 
   if (response.status === 401) {
     await clearStoredToken();
-    throw new Error('Authentication expired. Please sign in again.');
+    throw new Error("Authentication expired. Please sign in again.");
   }
 
   if (!response.ok) {
@@ -1227,19 +1480,19 @@ async function fetchRepoMilestones() {
   }
 
   const data = await response.json();
-  return data.map(milestone => ({
+  return data.map((milestone) => ({
     number: milestone.number,
     title: milestone.title,
     description: milestone.description,
     state: milestone.state,
-    due_on: milestone.due_on
+    due_on: milestone.due_on,
   }));
 }
 
 async function fetchRepoProjects() {
   const { owner, repo } = await getRepoConfig();
   if (!owner || !repo) {
-    throw new Error('Repository not configured.');
+    throw new Error("Repository not configured.");
   }
 
   const query = `
@@ -1261,11 +1514,11 @@ async function fetchRepoProjects() {
   const nodes = data?.repository?.projectsV2?.nodes || [];
 
   return nodes
-    .filter(project => project && project.closed === false)
-    .map(project => ({
+    .filter((project) => project && project.closed === false)
+    .map((project) => ({
       id: project.id,
       name: project.title,
-      number: project.number
+      number: project.number,
     }));
 }
 
@@ -1296,44 +1549,55 @@ async function fetchProjectColumns(projectId) {
   const fields = data?.node?.fields?.nodes || [];
 
   const statusField =
-    fields.find(field => field?.name?.toLowerCase() === 'status') ||
-    fields.find(field => field?.__typename === 'ProjectV2SingleSelectField');
+    fields.find((field) => field?.name?.toLowerCase() === "status") ||
+    fields.find((field) => field?.__typename === "ProjectV2SingleSelectField");
 
   if (!statusField) {
     return { fieldId: null, options: [] };
   }
 
-  const options = (statusField.options || []).map(option => ({
+  const options = (statusField.options || []).map((option) => ({
     id: option.id,
-    name: option.name
+    name: option.name,
   }));
 
   return {
     fieldId: statusField.id,
-    options
+    options,
   };
 }
 
 async function getSelectionPreferences() {
   const { owner, repo } = await getRepoConfig();
   if (!owner || !repo) {
-    return { milestoneNumber: null, projectId: null, statusFieldId: null, statusOptionId: null };
+    return {
+      milestoneNumber: null,
+      projectId: null,
+      statusFieldId: null,
+      statusOptionId: null,
+    };
   }
 
-  const storage = await chrome.storage.sync.get([LAST_MILESTONE_KEY, LAST_COLUMN_KEY]);
+  const storage = await chrome.storage.sync.get([
+    LAST_MILESTONE_KEY,
+    LAST_COLUMN_KEY,
+  ]);
   const repoKey = getRepoPreferenceKey(owner, repo);
 
   const milestoneStore = storage?.[LAST_MILESTONE_KEY] || {};
   const columnStore = storage?.[LAST_COLUMN_KEY] || {};
 
-  const milestoneNumber = typeof milestoneStore[repoKey] === 'number' ? milestoneStore[repoKey] : null;
+  const milestoneNumber =
+    typeof milestoneStore[repoKey] === "number"
+      ? milestoneStore[repoKey]
+      : null;
   const columnPref = columnStore[repoKey] || {};
 
   return {
     milestoneNumber,
     projectId: columnPref.projectId ?? null,
     statusFieldId: columnPref.statusFieldId ?? null,
-    statusOptionId: columnPref.statusOptionId ?? null
+    statusOptionId: columnPref.statusOptionId ?? null,
   };
 }
 
@@ -1344,12 +1608,15 @@ async function saveSelectionPreferences(preferences = {}) {
   }
 
   const repoKey = getRepoPreferenceKey(owner, repo);
-  const storage = await chrome.storage.sync.get([LAST_MILESTONE_KEY, LAST_COLUMN_KEY]);
+  const storage = await chrome.storage.sync.get([
+    LAST_MILESTONE_KEY,
+    LAST_COLUMN_KEY,
+  ]);
 
   const milestoneStore = { ...(storage?.[LAST_MILESTONE_KEY] || {}) };
   const columnStore = { ...(storage?.[LAST_COLUMN_KEY] || {}) };
 
-  if ('milestoneNumber' in preferences) {
+  if ("milestoneNumber" in preferences) {
     if (Number.isFinite(preferences.milestoneNumber)) {
       milestoneStore[repoKey] = preferences.milestoneNumber;
     } else {
@@ -1357,12 +1624,16 @@ async function saveSelectionPreferences(preferences = {}) {
     }
   }
 
-  if ('projectId' in preferences || 'statusOptionId' in preferences || 'statusFieldId' in preferences) {
+  if (
+    "projectId" in preferences ||
+    "statusOptionId" in preferences ||
+    "statusFieldId" in preferences
+  ) {
     if (preferences.projectId) {
       columnStore[repoKey] = {
         projectId: preferences.projectId,
         statusFieldId: preferences.statusFieldId || null,
-        statusOptionId: preferences.statusOptionId || null
+        statusOptionId: preferences.statusOptionId || null,
       };
     } else {
       delete columnStore[repoKey];
@@ -1371,7 +1642,7 @@ async function saveSelectionPreferences(preferences = {}) {
 
   await chrome.storage.sync.set({
     [LAST_MILESTONE_KEY]: milestoneStore,
-    [LAST_COLUMN_KEY]: columnStore
+    [LAST_COLUMN_KEY]: columnStore,
   });
 }
 
@@ -1379,7 +1650,12 @@ function getRepoPreferenceKey(owner, repo) {
   return `${owner}/${repo}`;
 }
 
-async function addIssueToProjectV2({ projectId, contentNodeId, statusFieldId, statusOptionId }) {
+async function addIssueToProjectV2({
+  projectId,
+  contentNodeId,
+  statusFieldId,
+  statusOptionId,
+}) {
   if (!projectId || !contentNodeId) {
     return;
   }
@@ -1396,11 +1672,11 @@ async function addIssueToProjectV2({ projectId, contentNodeId, statusFieldId, st
 
   const addResult = await githubGraphQLRequest(addMutation, {
     projectId,
-    contentId: contentNodeId
+    contentId: contentNodeId,
   });
   const itemId = addResult?.addProjectV2ItemById?.item?.id;
   if (!itemId) {
-    throw new Error('Project item creation failed.');
+    throw new Error("Project item creation failed.");
   }
 
   if (statusFieldId && statusOptionId) {
@@ -1425,7 +1701,7 @@ async function addIssueToProjectV2({ projectId, contentNodeId, statusFieldId, st
       projectId,
       itemId,
       fieldId: statusFieldId,
-      optionId: statusOptionId
+      optionId: statusOptionId,
     });
   }
 }
@@ -1433,28 +1709,30 @@ async function addIssueToProjectV2({ projectId, contentNodeId, statusFieldId, st
 async function githubGraphQLRequest(query, variables = {}) {
   const token = await getStoredToken();
   if (!token) {
-    throw new Error('Authentication required.');
+    throw new Error("Authentication required.");
   }
 
   const response = await fetch(GITHUB_GRAPHQL_URL, {
-    method: 'POST',
+    method: "POST",
     headers: {
       Authorization: `bearer ${token}`,
-      'Content-Type': 'application/json',
-      Accept: 'application/vnd.github+json'
+      "Content-Type": "application/json",
+      Accept: "application/vnd.github+json",
     },
-    body: JSON.stringify({ query, variables })
+    body: JSON.stringify({ query, variables }),
   });
 
   if (response.status === 401) {
     await clearStoredToken();
-    throw new Error('Authentication expired. Please sign in again.');
+    throw new Error("Authentication expired. Please sign in again.");
   }
 
   const result = await response.json();
 
   if (!response.ok || result.errors) {
-    const message = result?.errors?.[0]?.message || `GitHub GraphQL error (status ${response.status})`;
+    const message =
+      result?.errors?.[0]?.message ||
+      `GitHub GraphQL error (status ${response.status})`;
     throw new Error(message);
   }
 
@@ -1468,60 +1746,76 @@ async function getR2Config() {
     const derived = deriveWorkerProxyUrlFromManifest();
     return {
       // Prefer explicit config; fall back to derived/hardcoded defaults.
-      workerProxyUrl: (saved.workerProxyUrl || '').trim() || DEFAULT_R2_WORKER_PROXY_URL || derived,
-      workerProxyUrlSource: (saved.workerProxyUrl || '').trim()
-        ? 'stored'
-        : (DEFAULT_R2_WORKER_PROXY_URL || derived)
-          ? (derived ? 'derived' : 'default')
-          : 'unset',
+      workerProxyUrl:
+        (saved.workerProxyUrl || "").trim() ||
+        DEFAULT_R2_WORKER_PROXY_URL ||
+        derived,
+      workerProxyUrlSource: (saved.workerProxyUrl || "").trim()
+        ? "stored"
+        : DEFAULT_R2_WORKER_PROXY_URL || derived
+          ? derived
+            ? "derived"
+            : "default"
+          : "unset",
       // Keep legacy fields for backwards compatibility with older options UIs.
       bucketName: saved.bucketName || DEFAULT_R2_BUCKET_NAME,
-      publicUrl: saved.publicUrl || DEFAULT_R2_PUBLIC_URL
+      publicUrl: saved.publicUrl || DEFAULT_R2_PUBLIC_URL,
     };
   }
   // Fallback to defaults if not configured
   const derived = deriveWorkerProxyUrlFromManifest();
   return {
     workerProxyUrl: DEFAULT_R2_WORKER_PROXY_URL || derived, // Recommended: Cloudflare Worker proxy URL for secure uploads
-    workerProxyUrlSource: (DEFAULT_R2_WORKER_PROXY_URL || derived) ? (derived ? 'derived' : 'default') : 'unset',
+    workerProxyUrlSource:
+      DEFAULT_R2_WORKER_PROXY_URL || derived
+        ? derived
+          ? "derived"
+          : "default"
+        : "unset",
     bucketName: DEFAULT_R2_BUCKET_NAME,
-    publicUrl: DEFAULT_R2_PUBLIC_URL // Public URL for accessing uploaded files
+    publicUrl: DEFAULT_R2_PUBLIC_URL, // Public URL for accessing uploaded files
   };
 }
 
 async function uploadScreenshotToR2Blob(blob) {
   const config = await getR2Config();
-  
+
   // Use Cloudflare Worker proxy for secure uploads.
   // Direct-to-r2.dev PUT uploads do not work reliably (r2.dev is for public reads).
   if (config.workerProxyUrl) {
     return await uploadViaWorkerProxy(config.workerProxyUrl, blob);
   }
-  
+
   throw new Error(
-    'Screenshot uploads are not configured.\n\n' +
-    'To fix:\n' +
-    '1) Deploy the Cloudflare Worker (updates worker) with /upload enabled\n' +
-    '2) Set your extension manifest update_url to your worker (…/update.xml), OR set "Worker Proxy URL" in Options.\n'
+    "Screenshot uploads are not configured.\n\n" +
+      "To fix:\n" +
+      "1) Deploy the Cloudflare Worker (updates worker) with /upload enabled\n" +
+      '2) Set your extension manifest update_url to your worker (…/update.xml), OR set "Worker Proxy URL" in Options.\n',
   );
 }
 
 async function uploadViaWorkerProxy(workerUrl, blob) {
   try {
     const formData = new FormData();
-    formData.append('screenshot', blob, `screenshot-${Date.now()}.jpg`);
-    
-    const response = await fetchWithRetry(workerUrl, { method: 'POST', body: formData }, { maxAttempts: 3 });
+    formData.append("screenshot", blob, `screenshot-${Date.now()}.jpg`);
+
+    const response = await fetchWithRetry(
+      workerUrl,
+      { method: "POST", body: formData },
+      { maxAttempts: 3 },
+    );
 
     if (!response.ok) {
       const errorText = await response.text();
-      throw new Error(`Worker upload failed: ${response.status} - ${errorText}`);
+      throw new Error(
+        `Worker upload failed: ${response.status} - ${errorText}`,
+      );
     }
 
     const result = await response.json();
     return { url: result.url, download_url: result.url };
   } catch (error) {
-    console.error('Worker proxy upload error:', error);
+    console.error("Worker proxy upload error:", error);
     throw new Error(`Failed to upload via Worker proxy: ${error.message}`);
   }
 }
@@ -1532,46 +1826,59 @@ async function uploadIssueAttachment({ blob }) {
 }
 
 async function patchIssueBody(owner, repo, issueNumber, body, token) {
-  const response = await fetch(`https://api.github.com/repos/${owner}/${repo}/issues/${issueNumber}`, {
-    method: 'PATCH',
-    headers: {
-      Authorization: `token ${token}`,
-      Accept: 'application/vnd.github+json',
-      'Content-Type': 'application/json',
-      'X-GitHub-Api-Version': '2022-11-28'
+  const response = await fetch(
+    `https://api.github.com/repos/${owner}/${repo}/issues/${issueNumber}`,
+    {
+      method: "PATCH",
+      headers: {
+        Authorization: `token ${token}`,
+        Accept: "application/vnd.github+json",
+        "Content-Type": "application/json",
+        "X-GitHub-Api-Version": "2022-11-28",
+      },
+      body: JSON.stringify({ body }),
     },
-    body: JSON.stringify({ body })
-  });
+  );
 
   if (!response.ok) {
     const errorBody = await safeParseJson(response);
-    throw new Error(errorBody?.message || `Failed to update issue body (status ${response.status})`);
+    throw new Error(
+      errorBody?.message ||
+        `Failed to update issue body (status ${response.status})`,
+    );
   }
 }
 
 async function dataUrlToBlob(dataUrl) {
-  if (typeof dataUrl !== 'string' || !dataUrl.startsWith('data:')) {
+  if (typeof dataUrl !== "string" || !dataUrl.startsWith("data:")) {
     return null;
   }
   try {
     const response = await fetch(dataUrl);
     return await response.blob();
   } catch (error) {
-    console.warn('Unable to convert data URL to blob', error);
+    console.warn("Unable to convert data URL to blob", error);
     return null;
   }
 }
 
 async function fetchWithRetry(url, init, options = {}) {
-  const maxAttempts = Number.isFinite(options.maxAttempts) ? options.maxAttempts : 3;
-  const baseDelayMs = Number.isFinite(options.baseDelayMs) ? options.baseDelayMs : 400;
+  const maxAttempts = Number.isFinite(options.maxAttempts)
+    ? options.maxAttempts
+    : 3;
+  const baseDelayMs = Number.isFinite(options.baseDelayMs)
+    ? options.baseDelayMs
+    : 400;
 
   let lastError = null;
   for (let attempt = 1; attempt <= maxAttempts; attempt++) {
     try {
       const response = await fetch(url, init);
       // Retry transient errors.
-      if (response.status === 429 || (response.status >= 500 && response.status <= 599)) {
+      if (
+        response.status === 429 ||
+        (response.status >= 500 && response.status <= 599)
+      ) {
         lastError = new Error(`HTTP ${response.status}`);
       } else {
         return response;
@@ -1586,7 +1893,7 @@ async function fetchWithRetry(url, init, options = {}) {
       await sleep(delay);
     }
   }
-  throw lastError || new Error('Request failed');
+  throw lastError || new Error("Request failed");
 }
 
 async function safeParseJson(response) {
@@ -1600,10 +1907,9 @@ async function safeParseJson(response) {
 async function requestContextFromTab(tabId) {
   await ensureContentScript(tabId);
   try {
-    return await chrome.tabs.sendMessage(tabId, { type: 'captureContext' });
+    return await chrome.tabs.sendMessage(tabId, { type: "captureContext" });
   } catch (error) {
-    console.error('Failed to request context from tab', error);
-    throw new Error('Unable to capture context from this page.');
+    console.error("Failed to request context from tab", error);
+    throw new Error("Unable to capture context from this page.");
   }
 }
-
