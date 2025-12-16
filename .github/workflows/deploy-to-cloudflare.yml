@@ -12,7 +12,7 @@ permissions:
 jobs:
   deploy:
     runs-on: ubuntu-latest
-    
+
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
@@ -20,15 +20,21 @@ jobs:
       - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
-          node-version: '20'
+          node-version: "20"
+
+      - name: Format check
+        run: npm run format:check
 
       - name: Build extension
         run: npm run build
+        env:
+          UPDATE_BASE_URL: ${{ secrets.UPDATE_BASE_URL }}
 
       - name: Package extension
         run: npm run package
         env:
           VERSION: ${{ github.ref == 'refs/heads/main' && github.run_number || 'dev' }}
+          UPDATE_BASE_URL: ${{ secrets.UPDATE_BASE_URL }}
 
       - name: Get extension version
         id: get-version
@@ -83,6 +89,13 @@ jobs:
           AWS_ACCESS_KEY_ID: ${{ secrets.R2_ACCESS_KEY_ID }}
           AWS_SECRET_ACCESS_KEY: ${{ secrets.R2_SECRET_ACCESS_KEY }}
 
+      - name: Deploy Cloudflare Worker (updates + screenshot upload)
+        uses: cloudflare/wrangler-action@v3
+        with:
+          apiToken: ${{ secrets.CF_API_TOKEN }}
+          accountId: ${{ secrets.CF_ACCOUNT_ID }}
+          command: deploy
+
       - name: Deploy to Cloudflare Pages (Alternative)
         if: false # Set to true if using Pages instead of R2
         uses: cloudflare/pages-action@v1
@@ -104,13 +117,12 @@ jobs:
           body: |
             ## Changes
             - Auto-deployed from commit ${{ github.sha }}
-            
+
             ## Installation
             Download the extension ZIP and install manually, or wait for automatic update.
-            
+
             ## Files
             - Extension ZIP: `chrome-issue-reporter-v${{ steps.get-version.outputs.version }}.zip`
             - Update manifest: `update.xml`
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-

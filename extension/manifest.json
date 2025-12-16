@@ -33,7 +33,9 @@
   ],
   "host_permissions": [
     "https://api.github.com/*",
-    "https://github.com/login/*"
+    "https://github.com/login/*",
+    "https://*.workers.dev/*",
+    "https://*.r2.dev/*"
   ],
   "update_url": "https://chrome-issue-reporter-updates.your-account.workers.dev/update.xml"
 }

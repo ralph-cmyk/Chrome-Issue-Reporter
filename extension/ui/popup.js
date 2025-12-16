@@ -2,42 +2,26 @@ let cachedContext = null;
 let defaultLabels = [];
 
 // Constants
-const SCRIPT_INITIALIZATION_DELAY = 100; // ms to wait for content script to initialize
-const UNSUPPORTED_URL_PREFIXES = ['chrome://', 'chrome-extension://', 'edge://', 'about:'];
-const MAX_TITLE_LENGTH = 100; // Maximum length for auto-generated titles
+const MAX_TITLE_LENGTH = 100; // Maximum length for auto-generated titles (kept for older helper)
 
-const statusEl = document.getElementById('status');
-const titleInput = document.getElementById('title');
-const descriptionInput = document.getElementById('description');
-const technicalContextInput = document.getElementById('technical-context');
-const contextPreviewEl = document.getElementById('context-preview');
-const lastIssueEl = document.getElementById('last-issue');
-const createButton = document.getElementById('create');
-const liveSelectButton = document.getElementById('live-select');
-const openOptionsLink = document.getElementById('open-options');
-const repoInfoEl = document.getElementById('repo-info');
+const statusEl = document.getElementById("status");
+const contextPreviewEl = document.getElementById("context-preview");
+const lastIssueEl = document.getElementById("last-issue");
+const liveSelectButton = document.getElementById("live-select");
+const openModalButton = document.getElementById("open-modal");
+const openOptionsLink = document.getElementById("open-options");
+const repoInfoEl = document.getElementById("repo-info");
 
 init();
 
 function init() {
-  document.getElementById('issue-form').addEventListener('submit', handleSubmit);
-  liveSelectButton.addEventListener('click', handleLiveSelect);
-  openOptionsLink.addEventListener('click', (event) => {
+  liveSelectButton.addEventListener("click", handleLiveSelect);
+  openModalButton.addEventListener("click", handleOpenModal);
+  openOptionsLink.addEventListener("click", (event) => {
     event.preventDefault();
     chrome.runtime.openOptionsPage();
   });
-  
-  // Add Shift+Enter handler for description textarea
-  descriptionInput.addEventListener('keydown', (event) => {
-    if (event.key === 'Enter' && event.shiftKey) {
-      event.preventDefault();
-      document.getElementById('issue-form').dispatchEvent(new Event('submit', { bubbles: true }));
-    }
-  });
-  
-  // Auto-focus the description textarea when popup opens
-  descriptionInput.focus();
-  
+
   refresh();
 }
 
@@ -46,286 +30,229 @@ async function refresh() {
     refreshAuthState(),
     loadConfig(),
     loadContext(),
-    loadLastIssue()
+    loadLastIssue(),
   ]);
 }
 
 async function refreshAuthState(preserveMessage = false) {
-  const response = await chrome.runtime.sendMessage({ type: 'getAuthState' });
-  
+  const response = await chrome.runtime.sendMessage({ type: "getAuthState" });
+
   if (response?.success && response.authenticated) {
     // Enable live select button when authenticated
     liveSelectButton.disabled = false;
-    liveSelectButton.setAttribute('aria-label', 'Live Select Element - Click to select an element on the page');
+    liveSelectButton.setAttribute(
+      "aria-label",
+      "Live Select Element - Click to select an element on the page",
+    );
     if (!preserveMessage) {
-      setStatus('', 'info');
+      setStatus("", "info");
     }
   } else {
     // Disable and grey out live select button when not authenticated
     liveSelectButton.disabled = true;
-    liveSelectButton.setAttribute('aria-label', 'Live Select Element - Not authenticated. Please sign in from settings.');
+    liveSelectButton.setAttribute(
+      "aria-label",
+      "Live Select Element - Not authenticated. Please sign in from settings.",
+    );
     if (!preserveMessage) {
-      setStatus('', 'info');
+      setStatus("", "info");
     }
   }
 }
 
 async function loadConfig() {
-  const response = await chrome.runtime.sendMessage({ type: 'getConfig' });
-  const repoNameEl = repoInfoEl.querySelector('.repo-name');
-  
+  const response = await chrome.runtime.sendMessage({ type: "getConfig" });
+  const repoNameEl = repoInfoEl.querySelector(".repo-name");
+
   if (response?.success) {
-    defaultLabels = Array.isArray(response.config?.labels) ? response.config.labels : [];
-    
+    defaultLabels = Array.isArray(response.config?.labels)
+      ? response.config.labels
+      : [];
+
     if (response.config?.owner && response.config?.repo) {
       repoNameEl.textContent = `📂 ${response.config.owner}/${response.config.repo}`;
     } else {
-      repoNameEl.textContent = '📂 Repository not configured';
+      repoNameEl.textContent = "📂 Repository not configured";
     }
   }
 }
 
 async function loadContext() {
-  const response = await chrome.runtime.sendMessage({ type: 'getLastContext' });
+  const response = await chrome.runtime.sendMessage({ type: "getLastContext" });
   if (response?.success && response.context) {
     cachedContext = response.context;
     contextPreviewEl.textContent = formatContextPreview(cachedContext);
-    
-    // Store technical context in hidden field
-    technicalContextInput.value = JSON.stringify(cachedContext);
-    
-    if (!titleInput.value) {
-      titleInput.value = buildDefaultTitle(cachedContext);
-    }
-    // Pre-fill placeholder suggestions based on context
-    if (cachedContext.elementDescription) {
-      descriptionInput.placeholder = `e.g., The ${cachedContext.elementDescription} shows an error or doesn't work as expected...`;
-    }
   } else {
     cachedContext = null;
-    technicalContextInput.value = '';
-    contextPreviewEl.textContent = 'No captured context yet. Use "Live Select" to collect details from a page element.';
+    contextPreviewEl.textContent =
+      'No captured context yet. Use "Live Select" to collect details from a page element.';
   }
 }
 
 async function loadLastIssue() {
-  const response = await chrome.runtime.sendMessage({ type: 'getLastIssue' });
+  const response = await chrome.runtime.sendMessage({ type: "getLastIssue" });
   if (response?.success && response.issue) {
     lastIssueEl.innerHTML = `<a class="link" href="${response.issue.html_url}" target="_blank" rel="noreferrer">#${response.issue.number}</a>`;
   } else {
-    lastIssueEl.textContent = '';
+    lastIssueEl.textContent = "";
   }
 }
 
-async function handleSubmit(event) {
-  event.preventDefault();
-  const title = titleInput.value.trim();
-  const description = descriptionInput.value.trim();
-  const technicalContextStr = technicalContextInput.value;
-  
-  if (!title) {
-    setStatus('Title is required.', 'error');
-    return;
-  }
-  
-  if (!description) {
-    setStatus('Please describe what\'s wrong.', 'error');
-    return;
-  }
-
-  // Parse the context
-  let context = null;
-  try {
-    if (technicalContextStr) {
-      context = JSON.parse(technicalContextStr);
-    }
-  } catch (e) {
-    console.warn('Failed to parse technical context:', e);
-  }
-
-  setLoading(true);
-  setStatus('Creating issue…', 'info');
+async function handleOpenModal() {
+  openModalButton.disabled = true;
+  setStatus("Opening issue modal…", "info");
   try {
     const response = await chrome.runtime.sendMessage({
-      type: 'createIssue',
-      payload: {
-        title,
-        description,
-        context,
-        labels: defaultLabels
-      }
+      type: "startPageIssueFlow",
     });
-
-    if (response?.success) {
-      const issue = response.issue;
-      setStatus(`✅ Issue #${issue.number} created successfully!`, 'success');
-      lastIssueEl.innerHTML = `<a href="${issue.html_url}" target="_blank" rel="noreferrer">🔗 View Issue #${issue.number}</a>`;
-      
-      // Clear the form
-      titleInput.value = '';
-      descriptionInput.value = '';
-      technicalContextInput.value = '';
-      
-      // Clear cached context
-      cachedContext = null;
-      contextPreviewEl.textContent = 'No captured context yet. Use "Live Select" to collect details from a page element.';
-      await chrome.runtime.sendMessage({ type: 'clearLastContext' });
-    } else {
-      setStatus('❌ ' + (response?.error || 'Failed to create issue.'), 'error');
+    if (!response?.success) {
+      throw new Error(response?.error || "Failed to open issue modal.");
     }
+    window.close();
   } catch (error) {
-    setStatus('❌ ' + (error.message || 'Failed to create issue.'), 'error');
+    setStatus(
+      "❌ " + (error.message || "Failed to open issue modal."),
+      "error",
+    );
   } finally {
-    setLoading(false);
+    openModalButton.disabled = false;
   }
 }
 
 async function handleLiveSelect() {
   try {
-    // Get the active tab
-    const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
-    
-    if (!tab?.id) {
-      setStatus('❌ No active tab found.', 'error');
-      return;
+    const response = await chrome.runtime.sendMessage({
+      type: "startLiveSelectFlow",
+    });
+    if (!response?.success) {
+      throw new Error(response?.error || "Failed to start live select.");
     }
-    
-    // Check if page supports content scripts
-    if (tab.url && UNSUPPORTED_URL_PREFIXES.some(prefix => tab.url.startsWith(prefix))) {
-      setStatus('❌ Live select is not supported on browser internal pages.', 'error');
-      return;
-    }
-    
-    // Try to communicate with content script, inject if needed
-    try {
-      await chrome.tabs.sendMessage(tab.id, { type: 'startLiveSelect' });
-    } catch (error) {
-      // Content script not responding, try to inject it
-      try {
-        await chrome.scripting.executeScript({
-          target: { tabId: tab.id },
-          files: ['content.js']
-        });
-        // Wait for the script to initialize
-        await new Promise(resolve => setTimeout(resolve, SCRIPT_INITIALIZATION_DELAY));
-        // Try sending the message again
-        await chrome.tabs.sendMessage(tab.id, { type: 'startLiveSelect' });
-      } catch (injectError) {
-        console.error('Failed to inject content script:', injectError);
-        throw new Error('Cannot start live select on this page. The page may restrict extensions.');
-      }
-    }
-    
-    // Close popup so user can see the page
-    setStatus('🎯 Click on any element on the page...', 'info');
+    setStatus("🎯 Click on any element on the page…", "info");
     window.close();
   } catch (error) {
-    console.error('Live select error:', error);
-    setStatus('❌ ' + (error.message || 'Failed to start live select.'), 'error');
+    console.error("Live select error:", error);
+    setStatus(
+      "❌ " + (error.message || "Failed to start live select."),
+      "error",
+    );
   }
 }
 
 function buildDefaultTitle(context) {
   if (!context) {
-    return '';
+    return "";
   }
-  
+
   // Generate AI-suggested title based on element selection
   if (context.elementDescription) {
     const desc = context.elementDescription;
-    
+
     // Parse element description to create intelligent title
     // Format: <tag#id.class> - "text content"
     const tagMatch = desc.match(/<(\w+)/);
     const textMatch = desc.match(/"([^"]+)"/);
     const idMatch = desc.match(/#([\w-]+)/);
     const classMatch = desc.match(/\.([\w-]+)/);
-    
+
     // Sanitize extracted values to prevent XSS
-    const tag = tagMatch ? sanitizeForTitle(tagMatch[1]) : '';
-    const text = textMatch ? sanitizeForTitle(textMatch[1]) : '';
-    const id = idMatch ? sanitizeForTitle(idMatch[1]) : '';
-    const className = classMatch ? sanitizeForTitle(classMatch[1]) : '';
-    
+    const tag = tagMatch ? sanitizeForTitle(tagMatch[1]) : "";
+    const text = textMatch ? sanitizeForTitle(textMatch[1]) : "";
+    const id = idMatch ? sanitizeForTitle(idMatch[1]) : "";
+    const className = classMatch ? sanitizeForTitle(classMatch[1]) : "";
+
     // Build context-aware title
     let titleParts = [];
-    
+
     // Determine the element type for natural language
-    if (tag === 'button') {
-      titleParts.push('Change requested in button');
-    } else if (tag === 'a') {
-      titleParts.push('Change requested in link');
-    } else if (tag === 'img') {
-      titleParts.push('Change requested in image');
-    } else if (tag === 'input' || tag === 'textarea' || tag === 'select') {
-      titleParts.push('Change requested in form field');
-    } else if (tag === 'h1' || tag === 'h2' || tag === 'h3' || tag === 'h4' || tag === 'h5' || tag === 'h6') {
-      titleParts.push('Change requested in heading');
-    } else if (tag === 'nav') {
-      titleParts.push('Change requested in navigation');
-    } else if (tag === 'header') {
-      titleParts.push('Change requested in header');
-    } else if (tag === 'footer') {
-      titleParts.push('Change requested in footer');
-    } else if (tag === 'section' || tag === 'div') {
+    if (tag === "button") {
+      titleParts.push("Change requested in button");
+    } else if (tag === "a") {
+      titleParts.push("Change requested in link");
+    } else if (tag === "img") {
+      titleParts.push("Change requested in image");
+    } else if (tag === "input" || tag === "textarea" || tag === "select") {
+      titleParts.push("Change requested in form field");
+    } else if (
+      tag === "h1" ||
+      tag === "h2" ||
+      tag === "h3" ||
+      tag === "h4" ||
+      tag === "h5" ||
+      tag === "h6"
+    ) {
+      titleParts.push("Change requested in heading");
+    } else if (tag === "nav") {
+      titleParts.push("Change requested in navigation");
+    } else if (tag === "header") {
+      titleParts.push("Change requested in header");
+    } else if (tag === "footer") {
+      titleParts.push("Change requested in footer");
+    } else if (tag === "section" || tag === "div") {
       // Try to infer from class names
       if (className) {
-        if (className.includes('hero') || className.includes('banner') || className.includes('jumbotron')) {
-          titleParts.push('Change requested in the hero of the page');
-        } else if (className.includes('nav') || className.includes('menu')) {
-          titleParts.push('Change requested in navigation');
-        } else if (className.includes('card')) {
-          titleParts.push('Change requested in card');
-        } else if (className.includes('modal') || className.includes('dialog')) {
-          titleParts.push('Change requested in modal');
-        } else if (className.includes('sidebar')) {
-          titleParts.push('Change requested in sidebar');
+        if (
+          className.includes("hero") ||
+          className.includes("banner") ||
+          className.includes("jumbotron")
+        ) {
+          titleParts.push("Change requested in the hero of the page");
+        } else if (className.includes("nav") || className.includes("menu")) {
+          titleParts.push("Change requested in navigation");
+        } else if (className.includes("card")) {
+          titleParts.push("Change requested in card");
+        } else if (
+          className.includes("modal") ||
+          className.includes("dialog")
+        ) {
+          titleParts.push("Change requested in modal");
+        } else if (className.includes("sidebar")) {
+          titleParts.push("Change requested in sidebar");
         } else {
           titleParts.push(`Change requested in ${className} section`);
         }
       } else if (id) {
-        if (id.includes('hero') || id.includes('banner')) {
-          titleParts.push('Change requested in the hero of the page');
+        if (id.includes("hero") || id.includes("banner")) {
+          titleParts.push("Change requested in the hero of the page");
         } else {
           titleParts.push(`Change requested in ${id}`);
         }
       } else {
-        titleParts.push('Change requested in section');
+        titleParts.push("Change requested in section");
       }
     } else {
       // Generic fallback
-      titleParts.push(`Change requested in ${tag || 'element'}`);
+      titleParts.push(`Change requested in ${tag || "element"}`);
     }
-    
+
     // Add text context if available and short enough
     if (text && text.length < 30) {
       titleParts.push(`(${text})`);
     }
-    
-    return titleParts.join(' ');
+
+    return titleParts.join(" ");
   }
-  
+
   if (context.title) {
     return `Change requested: ${sanitizeForTitle(context.title)}`;
   }
-  
-  return 'Change requested on page';
+
+  return "Change requested on page";
 }
 
 // Sanitize values for use in title to prevent XSS
 function sanitizeForTitle(value) {
   if (!value) {
-    return '';
+    return "";
   }
   let sanitized = String(value);
-  
+
   // Remove any HTML tags and script-like content (iterate to handle nested tags)
   let prevLength;
   do {
     prevLength = sanitized.length;
-    sanitized = sanitized.replace(/<[^>]*>/g, '');
+    sanitized = sanitized.replace(/<[^>]*>/g, "");
   } while (sanitized.length !== prevLength);
-  
+
   // Remove any potential URI schemes (iterate to handle multiple occurrences)
   // Pre-compile regex for performance
   const dangerousSchemes = [
@@ -333,47 +260,47 @@ function sanitizeForTitle(value) {
     /data:/gi,
     /vbscript:/gi,
     /file:/gi,
-    /about:/gi
+    /about:/gi,
   ];
-  
-  dangerousSchemes.forEach(schemeRegex => {
+
+  dangerousSchemes.forEach((schemeRegex) => {
     do {
       prevLength = sanitized.length;
-      sanitized = sanitized.replace(schemeRegex, '');
+      sanitized = sanitized.replace(schemeRegex, "");
     } while (sanitized.length !== prevLength);
   });
-  
+
   // Remove event handler patterns (iterate to handle multiple occurrences)
   do {
     prevLength = sanitized.length;
-    sanitized = sanitized.replace(/on\w+=/gi, '');
+    sanitized = sanitized.replace(/on\w+=/gi, "");
   } while (sanitized.length !== prevLength);
-  
+
   // Limit length to prevent overly long titles
   if (sanitized.length > MAX_TITLE_LENGTH) {
     sanitized = sanitized.substring(0, MAX_TITLE_LENGTH);
   }
-  
+
   return sanitized.trim();
 }
 
 function formatContextPreview(context) {
   const parts = [];
-  
+
   if (context.elementDescription) {
     parts.push(`Selected: ${context.elementDescription}`);
   }
-  
+
   parts.push(context.url);
-  
+
   if (context.selectedText) {
-    parts.push('\nSelection:\n' + truncate(context.selectedText));
+    parts.push("\nSelection:\n" + truncate(context.selectedText));
   }
   if (context.htmlSnippet) {
-    parts.push('\nHTML snippet captured.');
+    parts.push("\nHTML snippet captured.");
   }
   if (context.scriptSnippet) {
-    parts.push('\nJS snippet captured.');
+    parts.push("\nJS snippet captured.");
   }
   if (context.jsError) {
     parts.push(`\nLast error: ${context.jsError.message}`);
@@ -383,31 +310,23 @@ function formatContextPreview(context) {
       parts.push(`\n${context.consoleLogs.length} console log(s) captured.`);
     }
   }
-  
-  return parts.join('\n');
+
+  return parts.join("\n");
 }
 
 function truncate(value) {
   if (!value) {
-    return '';
+    return "";
   }
   return value.length > 200 ? `${value.slice(0, 200)}…` : value;
 }
 
-function setStatus(message, type = 'info') {
+function setStatus(message, type = "info") {
   statusEl.textContent = message;
-  statusEl.className = 'status ' + type;
+  statusEl.className = "status " + type;
   if (message) {
-    statusEl.style.display = 'block';
+    statusEl.style.display = "block";
   }
 }
 
-function setLoading(isLoading) {
-  createButton.disabled = isLoading;
-  createButton.textContent = isLoading ? '⏳ Creating…' : '✨ Create Issue';
-  if (isLoading) {
-    createButton.classList.add('loading');
-  } else {
-    createButton.classList.remove('loading');
-  }
-}
+// setLoading removed; popup is now a launcher.

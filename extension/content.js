@@ -10,22 +10,28 @@ let originalConsoleError = null;
 let originalConsoleWarn = null;
 let originalConsoleInfo = null;
 let originalConsoleDebug = null;
-const MODAL_OVERLAY_ID = 'chrome-issue-reporter-modal-overlay';
-const MODAL_STYLE_ID = 'chrome-issue-reporter-modal-styles';
+const MODAL_OVERLAY_ID = "chrome-issue-reporter-modal-overlay";
+const MODAL_STYLE_ID = "chrome-issue-reporter-modal-styles";
 const MAX_AUTO_TITLE_LENGTH = 100;
 let modalElements = null;
 let toastTimeoutId = null;
 const columnsCache = new Map();
 const modalState = {
   context: null,
-  screenshotDataUrl: null,
+  screenshotId: null,
+  screenshotPreviewDataUrl: null,
   repo: null,
-  preferences: { milestoneNumber: null, projectId: null, statusFieldId: null, statusOptionId: null },
-  generatedTitle: '',
+  preferences: {
+    milestoneNumber: null,
+    projectId: null,
+    statusFieldId: null,
+    statusOptionId: null,
+  },
+  generatedTitle: "",
   titleDirty: false,
   submitting: false,
   lastIssue: null,
-  projectFieldId: null
+  projectFieldId: null,
 };
 let modalStylesInjected = false;
 
@@ -37,29 +43,29 @@ function initConsoleCapture() {
     originalConsoleWarn = console.warn;
     originalConsoleInfo = console.info;
     originalConsoleDebug = console.debug;
-    
-    console.log = function(...args) {
-      captureConsoleLog('log', args);
+
+    console.log = function (...args) {
+      captureConsoleLog("log", args);
       originalConsoleLog.apply(console, args);
     };
-    
-    console.error = function(...args) {
-      captureConsoleLog('error', args);
+
+    console.error = function (...args) {
+      captureConsoleLog("error", args);
       originalConsoleError.apply(console, args);
     };
-    
-    console.warn = function(...args) {
-      captureConsoleLog('warn', args);
+
+    console.warn = function (...args) {
+      captureConsoleLog("warn", args);
       originalConsoleWarn.apply(console, args);
     };
-    
-    console.info = function(...args) {
-      captureConsoleLog('info', args);
+
+    console.info = function (...args) {
+      captureConsoleLog("info", args);
       originalConsoleInfo.apply(console, args);
     };
-    
-    console.debug = function(...args) {
-      captureConsoleLog('debug', args);
+
+    console.debug = function (...args) {
+      captureConsoleLog("debug", args);
       originalConsoleDebug.apply(console, args);
     };
   }
@@ -67,23 +73,25 @@ function initConsoleCapture() {
 
 function captureConsoleLog(type, args) {
   try {
-    const message = args.map(arg => {
-      if (typeof arg === 'object') {
-        try {
-          return JSON.stringify(arg, null, 2);
-        } catch {
-          return String(arg);
+    const message = args
+      .map((arg) => {
+        if (typeof arg === "object") {
+          try {
+            return JSON.stringify(arg, null, 2);
+          } catch {
+            return String(arg);
+          }
         }
-      }
-      return String(arg);
-    }).join(' ');
-    
+        return String(arg);
+      })
+      .join(" ");
+
     consoleLogs.push({
       type,
       message,
-      timestamp: Date.now()
+      timestamp: Date.now(),
     });
-    
+
     // Keep only the last MAX_CONSOLE_LOGS
     if (consoleLogs.length > MAX_CONSOLE_LOGS) {
       consoleLogs = consoleLogs.slice(-MAX_CONSOLE_LOGS);
@@ -97,7 +105,7 @@ function captureConsoleLog(type, args) {
 initConsoleCapture();
 
 window.addEventListener(
-  'error',
+  "error",
   (event) => {
     if (event?.message) {
       lastJsError = {
@@ -105,87 +113,98 @@ window.addEventListener(
         source: event.filename,
         line: event.lineno,
         column: event.colno,
-        stack: event.error?.stack || '',
-        timestamp: Date.now()
+        stack: event.error?.stack || "",
+        timestamp: Date.now(),
       };
     }
   },
-  { capture: true }
+  { capture: true },
 );
 
 // Also capture unhandled promise rejections
 window.addEventListener(
-  'unhandledrejection',
+  "unhandledrejection",
   (event) => {
     if (event?.reason) {
       const reason = event.reason;
       const now = Date.now();
       // Only overwrite if no recent error (within 5 seconds) to avoid masking synchronous errors
-      if (!lastJsError || (now - lastJsError.timestamp) > 5000) {
+      if (!lastJsError || now - lastJsError.timestamp > 5000) {
         lastJsError = {
           message: reason?.message || String(reason),
-          source: 'Unhandled Promise Rejection',
+          source: "Unhandled Promise Rejection",
           line: 0,
           column: 0,
-          stack: reason?.stack || '',
-          timestamp: now
+          stack: reason?.stack || "",
+          timestamp: now,
         };
       }
     }
   },
-  { capture: true }
+  { capture: true },
 );
 
 chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
   (async () => {
     switch (message?.type) {
-      case 'captureContext': {
+      case "captureContext": {
         try {
           const context = collectContext();
           sendResponse(context);
         } catch (error) {
-          sendResponse({ error: error.message || 'Unable to capture context.' });
+          sendResponse({
+            error: error.message || "Unable to capture context.",
+          });
         }
         break;
       }
-      case 'startLiveSelect': {
+      case "startLiveSelect": {
         startLiveSelect();
         sendResponse({ success: true });
         break;
       }
-      case 'stopLiveSelect': {
+      case "stopLiveSelect": {
         stopLiveSelect();
         sendResponse({ success: true });
         break;
       }
-      case 'ping': {
+      case "ping": {
         sendResponse({ success: true });
         break;
       }
-      case 'startIssueFlow': {
+      case "startIssueFlow": {
         closeIssueModal();
         startLiveSelect();
         sendResponse({ success: true });
         break;
       }
-      case 'showIssueModal': {
+      case "showIssueModal": {
         try {
-          await openIssueModal(message.payload || {}, Boolean(message.fromLiveSelect));
+          await openIssueModal(
+            message.payload || {},
+            Boolean(message.fromLiveSelect),
+          );
           sendResponse({ success: true });
         } catch (error) {
-          console.error('Failed to open issue modal', error);
-          sendResponse({ success: false, error: error.message || 'Failed to open issue modal.' });
+          console.error("Failed to open issue modal", error);
+          sendResponse({
+            success: false,
+            error: error.message || "Failed to open issue modal.",
+          });
         }
         break;
       }
-      case 'issueFlowError': {
-        showToast(message?.message || 'Unable to start issue capture on this page.', 'error');
+      case "issueFlowError": {
+        showToast(
+          message?.message || "Unable to start issue capture on this page.",
+          "error",
+        );
         sendResponse({ success: true });
         break;
       }
       default:
         // Allow other handlers to process if needed
-        sendResponse({ success: false, error: 'Unhandled message type' });
+        sendResponse({ success: false, error: "Unhandled message type" });
     }
   })();
   return true;
@@ -193,13 +212,19 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
 
 function collectContext(selectedElement = null) {
   const selection = window.getSelection ? window.getSelection() : null;
-  const selectedText = selection ? truncate(selection.toString().trim()) : '';
+  const selectedText = selection ? truncate(selection.toString().trim()) : "";
 
   const anchorElement = selectedElement || findAnchorElement(selection);
-  const htmlSnippet = anchorElement ? truncate(anchorElement.outerHTML || '') : '';
-  const scriptSnippet = anchorElement ? extractScriptSnippet(anchorElement) : '';
-  const cssSelector = anchorElement ? generateCSSSelector(anchorElement) : '';
-  const elementDescription = anchorElement ? getElementDescription(anchorElement) : '';
+  const htmlSnippet = anchorElement
+    ? truncate(anchorElement.outerHTML || "")
+    : "";
+  const scriptSnippet = anchorElement
+    ? extractScriptSnippet(anchorElement)
+    : "";
+  const cssSelector = anchorElement ? generateCSSSelector(anchorElement) : "";
+  const elementDescription = anchorElement
+    ? getElementDescription(anchorElement)
+    : "";
 
   return {
     url: window.location.href,
@@ -213,49 +238,60 @@ function collectContext(selectedElement = null) {
     elementDescription,
     jsError: lastJsError,
     consoleLogs: consoleLogs.slice(-100), // Return last 100 console logs for better debugging context
-    timestamp: Date.now()
+    timestamp: Date.now(),
   };
 }
 
 function generateCSSSelector(element) {
-  if (!element) return '';
-  
+  if (!element) return "";
+
   if (element.id) {
     return `#${element.id}`;
   }
-  
+
   const path = [];
   while (element && element.nodeType === Node.ELEMENT_NODE) {
     let selector = element.nodeName.toLowerCase();
-    if (element.className && typeof element.className === 'string') {
-      const classes = element.className.trim().split(/\s+/).filter(c => c);
+    if (element.className && typeof element.className === "string") {
+      const classes = element.className
+        .trim()
+        .split(/\s+/)
+        .filter((c) => c);
       if (classes.length > 0) {
-        selector += '.' + classes.slice(0, 2).join('.');
+        selector += "." + classes.slice(0, 2).join(".");
       }
     }
     path.unshift(selector);
     element = element.parentElement;
     if (path.length >= 4) break; // Limit depth
   }
-  
-  return path.join(' > ');
+
+  return path.join(" > ");
 }
 
 function getElementDescription(element) {
-  if (!element) return '';
-  
+  if (!element) return "";
+
   const tag = element.tagName.toLowerCase();
-  const id = element.id ? `#${element.id}` : '';
-  const classes = element.className && typeof element.className === 'string' 
-    ? '.' + element.className.trim().split(/\s+/).filter(c => c).join('.') 
-    : '';
-  const text = element.textContent ? element.textContent.trim().slice(0, 50) : '';
-  
+  const id = element.id ? `#${element.id}` : "";
+  const classes =
+    element.className && typeof element.className === "string"
+      ? "." +
+        element.className
+          .trim()
+          .split(/\s+/)
+          .filter((c) => c)
+          .join(".")
+      : "";
+  const text = element.textContent
+    ? element.textContent.trim().slice(0, 50)
+    : "";
+
   let desc = `<${tag}${id}${classes}>`;
   if (text && text.length > 0) {
-    desc += ` - "${text}${text.length === 50 ? '...' : ''}"`;
+    desc += ` - "${text}${text.length === 50 ? "..." : ""}"`;
   }
-  
+
   return desc;
 }
 
@@ -268,32 +304,32 @@ function findAnchorElement(selection) {
     return null;
   }
   if (node.nodeType === Node.ELEMENT_NODE) {
-    return node.closest('*');
+    return node.closest("*");
   }
   if (node.parentElement) {
-    return node.parentElement.closest('*');
+    return node.parentElement.closest("*");
   }
   return null;
 }
 
 function extractScriptSnippet(anchorElement) {
   if (!anchorElement) {
-    return '';
+    return "";
   }
   let current = anchorElement;
   while (current) {
-    if (current.tagName && current.tagName.toLowerCase() === 'script') {
-      return truncate(current.textContent || '');
+    if (current.tagName && current.tagName.toLowerCase() === "script") {
+      return truncate(current.textContent || "");
     }
     current = current.parentElement;
   }
-  const script = anchorElement.querySelector('script');
-  return script ? truncate(script.textContent || '') : '';
+  const script = anchorElement.querySelector("script");
+  return script ? truncate(script.textContent || "") : "";
 }
 
 function truncate(value) {
   if (!value) {
-    return '';
+    return "";
   }
   if (value.length <= MAX_SNIPPET_LENGTH) {
     return value;
@@ -304,44 +340,44 @@ function truncate(value) {
 // Live Select Mode Functions
 function startLiveSelect() {
   if (liveSelectMode) return;
-  
+
   liveSelectMode = true;
-  
+
   // Create overlay to freeze interactions
   createOverlay();
-  
+
   // Add event listeners
-  document.addEventListener('mouseover', handleMouseOver, true);
-  document.addEventListener('click', handleElementClick, true);
-  document.addEventListener('keydown', handleKeyDown, true);
-  
+  document.addEventListener("mouseover", handleMouseOver, true);
+  document.addEventListener("click", handleElementClick, true);
+  document.addEventListener("keydown", handleKeyDown, true);
+
   // Show instructions
   showInstructions();
 }
 
 function stopLiveSelect() {
   if (!liveSelectMode) return;
-  
+
   liveSelectMode = false;
-  
+
   // Remove event listeners
-  document.removeEventListener('mouseover', handleMouseOver, true);
-  document.removeEventListener('click', handleElementClick, true);
-  document.removeEventListener('keydown', handleKeyDown, true);
-  
+  document.removeEventListener("mouseover", handleMouseOver, true);
+  document.removeEventListener("click", handleElementClick, true);
+  document.removeEventListener("keydown", handleKeyDown, true);
+
   // Remove highlight
   removeHighlight();
-  
+
   // Remove overlay
   removeOverlay();
-  
+
   // Remove instructions
   removeInstructions();
 }
 
 function createOverlay() {
-  overlayDiv = document.createElement('div');
-  overlayDiv.id = 'chrome-issue-reporter-overlay';
+  overlayDiv = document.createElement("div");
+  overlayDiv.id = "chrome-issue-reporter-overlay";
   overlayDiv.style.cssText = `
     position: fixed !important;
     top: 0 !important;
@@ -365,37 +401,41 @@ function removeOverlay() {
 
 function handleMouseOver(event) {
   if (!liveSelectMode) return;
-  
+
   event.stopPropagation();
   event.preventDefault();
-  
+
   const target = event.target;
-  
+
   // Don't highlight our own overlay or instruction elements
-  if (target.id === 'chrome-issue-reporter-overlay' || 
-      target.id === 'chrome-issue-reporter-instructions' ||
-      target.closest('#chrome-issue-reporter-instructions')) {
+  if (
+    target.id === "chrome-issue-reporter-overlay" ||
+    target.id === "chrome-issue-reporter-instructions" ||
+    target.closest("#chrome-issue-reporter-instructions")
+  ) {
     return;
   }
-  
+
   highlightElement(target);
 }
 
 function handleElementClick(event) {
   if (!liveSelectMode) return;
-  
+
   event.stopPropagation();
   event.preventDefault();
-  
+
   const target = event.target;
-  
+
   // Don't select our own elements
-  if (target.id === 'chrome-issue-reporter-overlay' || 
-      target.id === 'chrome-issue-reporter-instructions' ||
-      target.closest('#chrome-issue-reporter-instructions')) {
+  if (
+    target.id === "chrome-issue-reporter-overlay" ||
+    target.id === "chrome-issue-reporter-instructions" ||
+    target.closest("#chrome-issue-reporter-instructions")
+  ) {
     return;
   }
-  
+
   // Capture context for this element
   const context = collectContext(target);
   const rect = target.getBoundingClientRect();
@@ -404,27 +444,27 @@ function handleElementClick(event) {
       top: rect.top,
       left: rect.left,
       width: rect.width,
-      height: rect.height
+      height: rect.height,
     },
-    devicePixelRatio: window.devicePixelRatio || 1
+    devicePixelRatio: window.devicePixelRatio || 1,
   };
-  
+
   // Send to background script
   chrome.runtime.sendMessage({
-    type: 'liveSelectComplete',
+    type: "liveSelectComplete",
     context: context,
-    selection
+    selection,
   });
-  
+
   // Stop live select mode
   stopLiveSelect();
 }
 
 function handleKeyDown(event) {
   if (!liveSelectMode) return;
-  
+
   // ESC key to cancel
-  if (event.key === 'Escape') {
+  if (event.key === "Escape") {
     event.stopPropagation();
     event.preventDefault();
     stopLiveSelect();
@@ -434,22 +474,22 @@ function handleKeyDown(event) {
 function highlightElement(element) {
   // Remove previous highlight
   removeHighlight();
-  
+
   if (!element) return;
-  
+
   highlightedElement = element;
-  
+
   // Create highlight overlay
   const rect = element.getBoundingClientRect();
-  
+
   // Validate and sanitize rect values to prevent injection
   const top = Math.max(0, parseFloat(rect.top) || 0);
   const left = Math.max(0, parseFloat(rect.left) || 0);
   const width = Math.max(0, parseFloat(rect.width) || 0);
   const height = Math.max(0, parseFloat(rect.height) || 0);
-  
-  const highlightDiv = document.createElement('div');
-  highlightDiv.id = 'chrome-issue-reporter-highlight';
+
+  const highlightDiv = document.createElement("div");
+  highlightDiv.id = "chrome-issue-reporter-highlight";
   highlightDiv.style.cssText = `
     position: fixed !important;
     top: ${top}px !important;
@@ -466,7 +506,7 @@ function highlightElement(element) {
 }
 
 function removeHighlight() {
-  const existing = document.getElementById('chrome-issue-reporter-highlight');
+  const existing = document.getElementById("chrome-issue-reporter-highlight");
   if (existing && existing.parentNode) {
     existing.parentNode.removeChild(existing);
   }
@@ -474,8 +514,8 @@ function removeHighlight() {
 }
 
 function showInstructions() {
-  const instructions = document.createElement('div');
-  instructions.id = 'chrome-issue-reporter-instructions';
+  const instructions = document.createElement("div");
+  instructions.id = "chrome-issue-reporter-instructions";
   instructions.style.cssText = `
     position: fixed !important;
     top: 20px !important;
@@ -493,9 +533,10 @@ function showInstructions() {
     pointer-events: none !important;
     animation: slideDown 0.3s ease !important;
   `;
-  instructions.textContent = '🎯 Click on any element to select it (ESC to cancel)';
-  
-  const style = document.createElement('style');
+  instructions.textContent =
+    "🎯 Click on any element to select it (ESC to cancel)";
+
+  const style = document.createElement("style");
   style.textContent = `
     @keyframes slideDown {
       from {
@@ -509,12 +550,14 @@ function showInstructions() {
     }
   `;
   document.head.appendChild(style);
-  
+
   document.documentElement.appendChild(instructions);
 }
 
 function removeInstructions() {
-  const existing = document.getElementById('chrome-issue-reporter-instructions');
+  const existing = document.getElementById(
+    "chrome-issue-reporter-instructions",
+  );
   if (existing && existing.parentNode) {
     existing.parentNode.removeChild(existing);
   }
@@ -524,7 +567,7 @@ function ensureModalStyles() {
   if (modalStylesInjected) {
     return;
   }
-  const style = document.createElement('style');
+  const style = document.createElement("style");
   style.id = MODAL_STYLE_ID;
   style.textContent = `
     #${MODAL_OVERLAY_ID} {
@@ -798,9 +841,9 @@ function ensureIssueModalElements() {
 
   ensureModalStyles();
 
-  const overlay = document.createElement('div');
+  const overlay = document.createElement("div");
   overlay.id = MODAL_OVERLAY_ID;
-  overlay.setAttribute('role', 'presentation');
+  overlay.setAttribute("role", "presentation");
   overlay.innerHTML = `
     <div class="cir-modal" role="dialog" aria-modal="true" aria-labelledby="cir-heading">
       <div class="cir-modal-header">
@@ -838,51 +881,53 @@ function ensureIssueModalElements() {
   `;
   document.body.appendChild(overlay);
 
-  const modal = overlay.querySelector('.cir-modal');
-  const status = overlay.querySelector('.cir-status');
-  const form = overlay.querySelector('.cir-form');
-  const liveSelectButton = overlay.querySelector('.cir-live-select');
-  const description = overlay.querySelector('#cir-description');
-  const title = overlay.querySelector('#cir-title');
-  const projectSelect = overlay.querySelector('#cir-project');
-  const milestoneSelect = overlay.querySelector('#cir-milestone');
-  const columnSelect = overlay.querySelector('#cir-column');
-  const submitButton = overlay.querySelector('.cir-submit');
-  const contextPreview = overlay.querySelector('.cir-context-preview');
-  const screenshotContainer = overlay.querySelector('.cir-screenshot-container');
-  const repoLabel = overlay.querySelector('.cir-repo');
-  const settingsButton = overlay.querySelector('.cir-settings');
-  const closeButton = overlay.querySelector('.cir-close');
-  const lastIssueLink = overlay.querySelector('.cir-last-issue');
+  const modal = overlay.querySelector(".cir-modal");
+  const status = overlay.querySelector(".cir-status");
+  const form = overlay.querySelector(".cir-form");
+  const liveSelectButton = overlay.querySelector(".cir-live-select");
+  const description = overlay.querySelector("#cir-description");
+  const title = overlay.querySelector("#cir-title");
+  const projectSelect = overlay.querySelector("#cir-project");
+  const milestoneSelect = overlay.querySelector("#cir-milestone");
+  const columnSelect = overlay.querySelector("#cir-column");
+  const submitButton = overlay.querySelector(".cir-submit");
+  const contextPreview = overlay.querySelector(".cir-context-preview");
+  const screenshotContainer = overlay.querySelector(
+    ".cir-screenshot-container",
+  );
+  const repoLabel = overlay.querySelector(".cir-repo");
+  const settingsButton = overlay.querySelector(".cir-settings");
+  const closeButton = overlay.querySelector(".cir-close");
+  const lastIssueLink = overlay.querySelector(".cir-last-issue");
 
-  closeButton.addEventListener('click', () => closeIssueModal());
-  overlay.addEventListener('click', (event) => {
+  closeButton.addEventListener("click", () => closeIssueModal());
+  overlay.addEventListener("click", (event) => {
     if (event.target === overlay) {
       closeIssueModal();
     }
   });
 
-  liveSelectButton.addEventListener('click', () => {
+  liveSelectButton.addEventListener("click", () => {
     closeIssueModal();
     startLiveSelect();
   });
 
-  settingsButton.addEventListener('click', (event) => {
+  settingsButton.addEventListener("click", (event) => {
     event.preventDefault();
     chrome.runtime.openOptionsPage();
     closeIssueModal();
   });
 
-  form.addEventListener('submit', handleModalSubmit);
-  description.addEventListener('input', handleDescriptionInput);
-  title.addEventListener('input', () => {
+  form.addEventListener("submit", handleModalSubmit);
+  description.addEventListener("input", handleDescriptionInput);
+  title.addEventListener("input", () => {
     if (!modalState.submitting) {
       modalState.titleDirty = true;
     }
   });
-  projectSelect.addEventListener('change', handleProjectChange);
-  milestoneSelect.addEventListener('change', handleMilestoneChange);
-  columnSelect.addEventListener('change', handleColumnChange);
+  projectSelect.addEventListener("change", handleProjectChange);
+  milestoneSelect.addEventListener("change", handleMilestoneChange);
+  columnSelect.addEventListener("change", handleColumnChange);
 
   modalElements = {
     overlay,
@@ -900,7 +945,7 @@ function ensureIssueModalElements() {
     screenshotContainer,
     repoLabel,
     settingsButton,
-    lastIssueLink
+    lastIssueLink,
   };
 
   return modalElements;
@@ -909,9 +954,16 @@ function ensureIssueModalElements() {
 async function openIssueModal(payload = {}, fromLiveSelect = false) {
   const elements = ensureIssueModalElements();
   modalState.context = payload.context || null;
-  modalState.screenshotDataUrl = payload.screenshotDataUrl || null;
+  modalState.screenshotId = payload.screenshotId || null;
+  modalState.screenshotPreviewDataUrl =
+    payload.screenshotPreviewDataUrl || null;
   modalState.repo = payload.repo || null;
-  modalState.preferences = payload.preferences || { milestoneNumber: null, projectId: null, statusFieldId: null, statusOptionId: null };
+  modalState.preferences = payload.preferences || {
+    milestoneNumber: null,
+    projectId: null,
+    statusFieldId: null,
+    statusOptionId: null,
+  };
   modalState.generatedTitle = buildDefaultTitle(modalState.context);
   modalState.titleDirty = false;
   modalState.submitting = false;
@@ -920,53 +972,65 @@ async function openIssueModal(payload = {}, fromLiveSelect = false) {
 
   // Show screenshot error if present
   if (payload.screenshotError) {
-    setModalStatus(`Screenshot capture failed: ${payload.screenshotError}. The issue will be created without a screenshot.`, 'error');
+    setModalStatus(
+      `Screenshot capture failed: ${payload.screenshotError}. The issue will be created without a screenshot.`,
+      "error",
+    );
   }
 
-  setModalStatus('');
+  setModalStatus("");
   setSubmittingState(false);
 
-  elements.description.value = '';
+  elements.description.value = "";
   elements.description.placeholder = modalState.context?.elementDescription
     ? `e.g., The ${modalState.context.elementDescription} is misaligned…`
-    : 'Describe what you expected and what happened…';
+    : "Describe what you expected and what happened…";
 
-  elements.title.value = modalState.generatedTitle || '';
+  elements.title.value = modalState.generatedTitle || "";
 
   elements.repoLabel.textContent = modalState.repo
     ? `${modalState.repo.owner}/${modalState.repo.name}`
-    : 'Repository not configured';
+    : "Repository not configured";
 
   updateContextPreview(modalState.context);
-  updateScreenshotPreview(modalState.screenshotDataUrl, modalState.context);
+  updateScreenshotPreview(
+    modalState.screenshotPreviewDataUrl,
+    Boolean(modalState.screenshotId),
+    modalState.context,
+  );
   updateLastIssueLink(payload.lastIssue);
 
-  elements.overlay.classList.add('is-visible');
-  document.body.dataset.cirIssueModalOpen = 'true';
-  document.body.style.setProperty('overflow', 'hidden');
+  elements.overlay.classList.add("is-visible");
+  document.body.dataset.cirIssueModalOpen = "true";
+  document.body.style.setProperty("overflow", "hidden");
 
   requestAnimationFrame(() => {
     elements.description.focus();
   });
 
-  document.addEventListener('keydown', handleModalKeydown, true);
+  document.addEventListener("keydown", handleModalKeydown, true);
 
   try {
     await populateDropdowns();
   } catch (error) {
-    console.error('Unable to populate dropdowns', error);
-    setModalStatus(error.message || 'Unable to load milestones and projects.', 'error');
+    console.error("Unable to populate dropdowns", error);
+    setModalStatus(
+      error.message || "Unable to load milestones and projects.",
+      "error",
+    );
   }
 
   if (fromLiveSelect) {
-    const hasScreenshot = Boolean(modalState.screenshotDataUrl);
+    const hasScreenshot = Boolean(modalState.screenshotId);
     showToast(
-      hasScreenshot 
-        ? 'Element and screenshot captured. Describe the problem and submit when ready.'
-        : 'Element captured. Describe the problem and submit when ready.'
+      hasScreenshot
+        ? "Element and screenshot captured. Describe the problem and submit when ready."
+        : "Element captured. Describe the problem and submit when ready.",
     );
-  } else if (modalState.screenshotDataUrl) {
-    showToast('Screenshot captured. Describe the problem and submit when ready.');
+  } else if (modalState.screenshotId) {
+    showToast(
+      "Screenshot captured. Describe the problem and submit when ready.",
+    );
   }
 }
 
@@ -974,19 +1038,19 @@ function closeIssueModal() {
   if (!modalElements) {
     return;
   }
-  modalElements.overlay.classList.remove('is-visible');
-  document.body.removeAttribute('data-cir-issue-modal-open');
-  document.body.style.removeProperty('overflow');
-  document.removeEventListener('keydown', handleModalKeydown, true);
+  modalElements.overlay.classList.remove("is-visible");
+  document.body.removeAttribute("data-cir-issue-modal-open");
+  document.body.style.removeProperty("overflow");
+  document.removeEventListener("keydown", handleModalKeydown, true);
 }
 
-function setModalStatus(message, type = 'info') {
+function setModalStatus(message, type = "info") {
   if (!modalElements) return;
   const statusEl = modalElements.status;
-  statusEl.textContent = message || '';
-  statusEl.className = 'cir-status';
+  statusEl.textContent = message || "";
+  statusEl.className = "cir-status";
   if (message) {
-    statusEl.classList.add('is-visible', type);
+    statusEl.classList.add("is-visible", type);
   }
 }
 
@@ -1000,59 +1064,82 @@ function setSubmittingState(isSubmitting) {
     modalElements.milestoneSelect,
     modalElements.columnSelect,
     modalElements.submitButton,
-    modalElements.liveSelectButton
+    modalElements.liveSelectButton,
   ];
-  controls.forEach(control => {
+  controls.forEach((control) => {
     control.disabled = isSubmitting;
   });
-  modalElements.submitButton.textContent = isSubmitting ? 'Creating…' : 'Create issue';
+  modalElements.submitButton.textContent = isSubmitting
+    ? "Creating…"
+    : "Create issue";
 }
 
 async function populateDropdowns() {
   if (!modalElements) return;
 
-  modalElements.projectSelect.innerHTML = '<option value="">Loading projects…</option>';
+  modalElements.projectSelect.innerHTML =
+    '<option value="">Loading projects…</option>';
   modalElements.projectSelect.disabled = true;
-  modalElements.milestoneSelect.innerHTML = '<option value="">Loading milestones…</option>';
+  modalElements.milestoneSelect.innerHTML =
+    '<option value="">Loading milestones…</option>';
   modalElements.milestoneSelect.disabled = true;
-  modalElements.columnSelect.innerHTML = '<option value="">Select a project first</option>';
+  modalElements.columnSelect.innerHTML =
+    '<option value="">Select a project first</option>';
   modalElements.columnSelect.disabled = true;
 
-  const milestonePromise = chrome.runtime.sendMessage({ type: 'getMilestones' }).catch(() => null);
-  const projectsPromise = chrome.runtime.sendMessage({ type: 'getProjects' }).catch(() => null);
+  const milestonePromise = chrome.runtime
+    .sendMessage({ type: "getMilestones" })
+    .catch(() => null);
+  const projectsPromise = chrome.runtime
+    .sendMessage({ type: "getProjects" })
+    .catch(() => null);
 
-  const [milestonesResponse, projectsResponse] = await Promise.all([milestonePromise, projectsPromise]);
+  const [milestonesResponse, projectsResponse] = await Promise.all([
+    milestonePromise,
+    projectsPromise,
+  ]);
 
-  const milestones = milestonesResponse?.success ? milestonesResponse.milestones || [] : [];
-  const projects = projectsResponse?.success ? projectsResponse.projects || [] : [];
+  const milestones = milestonesResponse?.success
+    ? milestonesResponse.milestones || []
+    : [];
+  const projects = projectsResponse?.success
+    ? projectsResponse.projects || []
+    : [];
 
-  modalElements.milestoneSelect.innerHTML = '';
-  const milestoneDefaultOption = document.createElement('option');
-  milestoneDefaultOption.value = '';
-  milestoneDefaultOption.textContent = 'No milestone';
+  modalElements.milestoneSelect.innerHTML = "";
+  const milestoneDefaultOption = document.createElement("option");
+  milestoneDefaultOption.value = "";
+  milestoneDefaultOption.textContent = "No milestone";
   modalElements.milestoneSelect.appendChild(milestoneDefaultOption);
-  milestones.forEach(milestone => {
-    const option = document.createElement('option');
+  milestones.forEach((milestone) => {
+    const option = document.createElement("option");
     option.value = String(milestone.number);
-    const due = milestone.due_on ? ` • due ${new Date(milestone.due_on).toLocaleDateString()}` : '';
+    const due = milestone.due_on
+      ? ` • due ${new Date(milestone.due_on).toLocaleDateString()}`
+      : "";
     option.textContent = `${milestone.title}${due}`;
     modalElements.milestoneSelect.appendChild(option);
   });
   modalElements.milestoneSelect.disabled = false;
 
-  if (modalState.preferences.milestoneNumber && milestones.some(m => m.number === modalState.preferences.milestoneNumber)) {
-    modalElements.milestoneSelect.value = String(modalState.preferences.milestoneNumber);
+  if (
+    modalState.preferences.milestoneNumber &&
+    milestones.some((m) => m.number === modalState.preferences.milestoneNumber)
+  ) {
+    modalElements.milestoneSelect.value = String(
+      modalState.preferences.milestoneNumber,
+    );
   } else {
-    modalElements.milestoneSelect.value = '';
+    modalElements.milestoneSelect.value = "";
   }
 
-  modalElements.projectSelect.innerHTML = '';
-  const projectDefaultOption = document.createElement('option');
-  projectDefaultOption.value = '';
-  projectDefaultOption.textContent = 'No project board';
+  modalElements.projectSelect.innerHTML = "";
+  const projectDefaultOption = document.createElement("option");
+  projectDefaultOption.value = "";
+  projectDefaultOption.textContent = "No project board";
   modalElements.projectSelect.appendChild(projectDefaultOption);
-  projects.forEach(project => {
-    const option = document.createElement('option');
+  projects.forEach((project) => {
+    const option = document.createElement("option");
     option.value = project.id;
     option.textContent = project.name;
     modalElements.projectSelect.appendChild(option);
@@ -1060,14 +1147,21 @@ async function populateDropdowns() {
   modalElements.projectSelect.disabled = false;
 
   const preferredProjectId = modalState.preferences.projectId;
-  if (preferredProjectId && projects.some(project => project.id === preferredProjectId)) {
+  if (
+    preferredProjectId &&
+    projects.some((project) => project.id === preferredProjectId)
+  ) {
     modalElements.projectSelect.value = preferredProjectId;
-    const columnData = await loadColumnsForProject(preferredProjectId, modalState.preferences.statusOptionId || null);
+    const columnData = await loadColumnsForProject(
+      preferredProjectId,
+      modalState.preferences.statusOptionId || null,
+    );
     modalState.preferences.statusFieldId = columnData?.fieldId || null;
   } else {
-    modalElements.projectSelect.value = '';
+    modalElements.projectSelect.value = "";
     modalState.projectFieldId = null;
-    modalElements.columnSelect.innerHTML = '<option value="">Select a project first</option>';
+    modalElements.columnSelect.innerHTML =
+      '<option value="">Select a project first</option>';
     modalElements.columnSelect.disabled = true;
   }
 }
@@ -1076,17 +1170,21 @@ async function loadColumnsForProject(projectId, selectOptionId = null) {
   if (!modalElements) return;
   if (!projectId) {
     modalState.projectFieldId = null;
-    modalElements.columnSelect.innerHTML = '<option value="">Select a project first</option>';
+    modalElements.columnSelect.innerHTML =
+      '<option value="">Select a project first</option>';
     modalElements.columnSelect.disabled = true;
     return null;
   }
 
   let columnData = columnsCache.get(projectId);
   if (!columnData) {
-    const response = await chrome.runtime.sendMessage({ type: 'getProjectColumns', projectId }).catch(() => null);
+    const response = await chrome.runtime
+      .sendMessage({ type: "getProjectColumns", projectId })
+      .catch(() => null);
     if (!response?.success) {
       modalState.projectFieldId = null;
-      modalElements.columnSelect.innerHTML = '<option value="">Unable to load status options</option>';
+      modalElements.columnSelect.innerHTML =
+        '<option value="">Unable to load status options</option>';
       modalElements.columnSelect.disabled = true;
       return null;
     }
@@ -1099,14 +1197,15 @@ async function loadColumnsForProject(projectId, selectOptionId = null) {
 
   const options = Array.isArray(columnData.options) ? columnData.options : [];
 
-  modalElements.columnSelect.innerHTML = '';
-  const defaultOption = document.createElement('option');
-  defaultOption.value = '';
-  defaultOption.textContent = options.length > 0 ? 'Select status' : 'No status options';
+  modalElements.columnSelect.innerHTML = "";
+  const defaultOption = document.createElement("option");
+  defaultOption.value = "";
+  defaultOption.textContent =
+    options.length > 0 ? "Select status" : "No status options";
   modalElements.columnSelect.appendChild(defaultOption);
 
-  options.forEach(option => {
-    const optionEl = document.createElement('option');
+  options.forEach((option) => {
+    const optionEl = document.createElement("option");
     optionEl.value = option.id;
     optionEl.textContent = option.name;
     modalElements.columnSelect.appendChild(optionEl);
@@ -1114,11 +1213,14 @@ async function loadColumnsForProject(projectId, selectOptionId = null) {
 
   modalElements.columnSelect.disabled = options.length === 0;
 
-  if (selectOptionId && options.some(option => option.id === selectOptionId)) {
+  if (
+    selectOptionId &&
+    options.some((option) => option.id === selectOptionId)
+  ) {
     modalElements.columnSelect.value = selectOptionId;
     modalState.preferences.statusOptionId = selectOptionId;
   } else {
-    modalElements.columnSelect.value = '';
+    modalElements.columnSelect.value = "";
     modalState.preferences.statusOptionId = null;
   }
 
@@ -1135,18 +1237,18 @@ async function handleModalSubmit(event) {
   const description = modalElements.description.value.trim();
 
   if (!title) {
-    setModalStatus('Title is required.', 'error');
+    setModalStatus("Title is required.", "error");
     modalElements.title.focus();
     return;
   }
 
   if (!description) {
-    setModalStatus('Please describe what\'s wrong.', 'error');
+    setModalStatus("Please describe what's wrong.", "error");
     modalElements.description.focus();
     return;
   }
 
-  setModalStatus('Creating issue…', 'info');
+  setModalStatus("Creating issue…", "info");
   setSubmittingState(true);
 
   const projectId = modalElements.projectSelect.value || null;
@@ -1155,7 +1257,7 @@ async function handleModalSubmit(event) {
 
   try {
     const response = await chrome.runtime.sendMessage({
-      type: 'createIssue',
+      type: "createIssue",
       payload: {
         title,
         description,
@@ -1164,43 +1266,57 @@ async function handleModalSubmit(event) {
         projectId: projectId || undefined,
         projectFieldId: modalState.projectFieldId || undefined,
         projectOptionId: statusOptionId || undefined,
-        screenshotDataUrl: modalState.screenshotDataUrl
-      }
+        screenshotId: modalState.screenshotId,
+      },
     });
 
     if (response?.success) {
       const issue = response.issue;
       let toastMessage = `Issue #${issue.number} created successfully!`;
-      
-      if (modalState.screenshotDataUrl && !response.screenshotAttached) {
-        const errorMsg = response.issue?.screenshotUploadError || 'Screenshot upload failed';
+
+      if (modalState.screenshotId && !response.screenshotAttached) {
+        const errorMsg =
+          response.issue?.screenshotUploadError || "Screenshot upload failed";
         toastMessage += ` Note: ${errorMsg}`;
       }
-      
+
       closeIssueModal();
-      showToast(toastMessage, 'success', { href: issue.html_url, label: 'Open issue' });
+      showToast(toastMessage, "success", {
+        href: issue.html_url,
+        label: "Open issue",
+      });
     } else {
-      throw new Error(response?.error || 'Issue creation failed');
+      throw new Error(response?.error || "Issue creation failed");
     }
   } catch (error) {
-    console.error('Issue creation error', error);
-    const errorMessage = error.message || 'Failed to create issue.';
-    
+    console.error("Issue creation error", error);
+    const errorMessage = error.message || "Failed to create issue.";
+
     // Provide user-friendly error messages
     let userMessage = errorMessage;
-    if (errorMessage.includes('Authentication')) {
-      userMessage = 'Authentication failed. Please sign in again from the extension options.';
-    } else if (errorMessage.includes('Repository')) {
-      userMessage = 'Repository configuration is missing. Please configure your repository in extension options.';
-    } else if (errorMessage.includes('screenshot') || errorMessage.includes('Screenshot')) {
+    if (errorMessage.includes("Authentication")) {
+      userMessage =
+        "Authentication failed. Please sign in again from the extension options.";
+    } else if (errorMessage.includes("Repository")) {
+      userMessage =
+        "Repository configuration is missing. Please configure your repository in extension options.";
+    } else if (
+      errorMessage.includes("screenshot") ||
+      errorMessage.includes("Screenshot")
+    ) {
       userMessage = `${errorMessage} The issue will be created without a screenshot.`;
-    } else if (errorMessage.includes('rate limit')) {
-      userMessage = 'GitHub rate limit exceeded. Please wait a few minutes and try again.';
-    } else if (errorMessage.includes('network') || errorMessage.includes('fetch')) {
-      userMessage = 'Network error. Please check your internet connection and try again.';
+    } else if (errorMessage.includes("rate limit")) {
+      userMessage =
+        "GitHub rate limit exceeded. Please wait a few minutes and try again.";
+    } else if (
+      errorMessage.includes("network") ||
+      errorMessage.includes("fetch")
+    ) {
+      userMessage =
+        "Network error. Please check your internet connection and try again.";
     }
-    
-    setModalStatus(userMessage, 'error');
+
+    setModalStatus(userMessage, "error");
     setSubmittingState(false);
   }
 }
@@ -1209,7 +1325,10 @@ function handleDescriptionInput() {
   if (modalState.titleDirty || modalState.submitting || !modalElements) {
     return;
   }
-  const autoTitle = generateTitleFromDescription(modalElements.description.value, buildDefaultTitle(modalState.context));
+  const autoTitle = generateTitleFromDescription(
+    modalElements.description.value,
+    buildDefaultTitle(modalState.context),
+  );
   modalState.generatedTitle = autoTitle;
   modalElements.title.value = autoTitle;
 }
@@ -1224,8 +1343,12 @@ async function handleProjectChange(event) {
 
   try {
     await chrome.runtime.sendMessage({
-      type: 'saveSelectionPreferences',
-      preferences: { projectId: value, statusOptionId: null, statusFieldId: null }
+      type: "saveSelectionPreferences",
+      preferences: {
+        projectId: value,
+        statusOptionId: null,
+        statusFieldId: null,
+      },
     });
   } catch {
     // ignore
@@ -1238,12 +1361,12 @@ async function handleProjectChange(event) {
     if (value && modalState.projectFieldId) {
       try {
         await chrome.runtime.sendMessage({
-          type: 'saveSelectionPreferences',
+          type: "saveSelectionPreferences",
           preferences: {
             projectId: value,
             statusFieldId: modalState.projectFieldId,
-            statusOptionId: null
-          }
+            statusOptionId: null,
+          },
         });
       } catch {
         // ignore
@@ -1257,8 +1380,8 @@ async function handleMilestoneChange(event) {
   modalState.preferences.milestoneNumber = value;
   try {
     await chrome.runtime.sendMessage({
-      type: 'saveSelectionPreferences',
-      preferences: { milestoneNumber: value }
+      type: "saveSelectionPreferences",
+      preferences: { milestoneNumber: value },
     });
   } catch {
     // ignore
@@ -1275,12 +1398,12 @@ async function handleColumnChange(event) {
   if (projectId && modalState.projectFieldId) {
     try {
       await chrome.runtime.sendMessage({
-        type: 'saveSelectionPreferences',
+        type: "saveSelectionPreferences",
         preferences: {
           projectId,
           statusFieldId: modalState.projectFieldId,
-          statusOptionId
-        }
+          statusOptionId,
+        },
       });
     } catch {
       // ignore
@@ -1289,10 +1412,10 @@ async function handleColumnChange(event) {
 }
 
 function handleModalKeydown(event) {
-  if (!modalElements?.overlay.classList.contains('is-visible')) {
+  if (!modalElements?.overlay.classList.contains("is-visible")) {
     return;
   }
-  if (event.key === 'Escape') {
+  if (event.key === "Escape") {
     event.preventDefault();
     event.stopPropagation();
     closeIssueModal();
@@ -1301,114 +1424,135 @@ function handleModalKeydown(event) {
 
 function updateContextPreview(context) {
   if (!modalElements) return;
-  modalElements.contextPreview.textContent = context ? formatContextPreview(context) : 'No context captured yet.';
+  modalElements.contextPreview.textContent = context
+    ? formatContextPreview(context)
+    : "No context captured yet.";
 }
 
-function updateScreenshotPreview(dataUrl, context) {
+function updateScreenshotPreview(previewDataUrl, hasScreenshot, context) {
   if (!modalElements) return;
-  modalElements.screenshotContainer.innerHTML = '';
-  if (!dataUrl) {
+  modalElements.screenshotContainer.innerHTML = "";
+  if (!hasScreenshot) {
     return;
   }
 
-  const titleContainer = document.createElement('div');
-  titleContainer.style.display = 'flex';
-  titleContainer.style.alignItems = 'center';
-  titleContainer.style.gap = '8px';
-  titleContainer.style.marginBottom = '8px';
+  const titleContainer = document.createElement("div");
+  titleContainer.style.display = "flex";
+  titleContainer.style.alignItems = "center";
+  titleContainer.style.gap = "8px";
+  titleContainer.style.marginBottom = "8px";
 
-  const title = document.createElement('span');
-  title.textContent = '📸 Screenshot captured';
-  title.style.fontSize = '12px';
-  title.style.fontWeight = '600';
-  title.style.color = '#475569';
+  const title = document.createElement("span");
+  title.textContent = "📸 Screenshot captured";
+  title.style.fontSize = "12px";
+  title.style.fontWeight = "600";
+  title.style.color = "#475569";
 
-  const badge = document.createElement('span');
-  badge.textContent = '✓';
-  badge.style.background = '#10b981';
-  badge.style.color = 'white';
-  badge.style.borderRadius = '50%';
-  badge.style.width = '18px';
-  badge.style.height = '18px';
-  badge.style.display = 'inline-flex';
-  badge.style.alignItems = 'center';
-  badge.style.justifyContent = 'center';
-  badge.style.fontSize = '10px';
-  badge.style.fontWeight = 'bold';
+  const badge = document.createElement("span");
+  badge.textContent = "✓";
+  badge.style.background = "#10b981";
+  badge.style.color = "white";
+  badge.style.borderRadius = "50%";
+  badge.style.width = "18px";
+  badge.style.height = "18px";
+  badge.style.display = "inline-flex";
+  badge.style.alignItems = "center";
+  badge.style.justifyContent = "center";
+  badge.style.fontSize = "10px";
+  badge.style.fontWeight = "bold";
 
   titleContainer.appendChild(badge);
   titleContainer.appendChild(title);
 
-  const image = document.createElement('img');
-  image.src = dataUrl;
-  image.alt = context?.elementDescription ? `Screenshot of ${context.elementDescription}` : 'Screenshot';
-  image.style.cursor = 'pointer';
-  image.title = 'Click to view full size';
-  image.addEventListener('click', () => {
-    const newWindow = window.open();
-    if (newWindow) {
-      newWindow.document.write(`<img src="${dataUrl}" style="max-width: 100%; height: auto;" />`);
-    }
-  });
+  const image = document.createElement("img");
+  if (previewDataUrl) {
+    image.src = previewDataUrl;
+    image.alt = context?.elementDescription
+      ? `Screenshot of ${context.elementDescription}`
+      : "Screenshot";
+    image.style.cursor = "pointer";
+    image.title = "Click to view full size preview";
+    image.addEventListener("click", () => {
+      const newWindow = window.open();
+      if (newWindow) {
+        newWindow.document.write(
+          `<img src="${previewDataUrl}" style="max-width: 100%; height: auto;" />`,
+        );
+      }
+    });
+  } else {
+    // Preview might be omitted to keep memory small; still indicate the screenshot exists.
+    image.alt = "Screenshot captured (preview unavailable)";
+    image.style.display = "none";
+  }
 
   modalElements.screenshotContainer.appendChild(titleContainer);
-  modalElements.screenshotContainer.appendChild(image);
+  if (previewDataUrl) {
+    modalElements.screenshotContainer.appendChild(image);
+  } else {
+    const note = document.createElement("div");
+    note.textContent =
+      "Screenshot captured (preview unavailable). It will be attached to the issue.";
+    note.style.fontSize = "12px";
+    note.style.color = "#64748b";
+    modalElements.screenshotContainer.appendChild(note);
+  }
 }
 
 function updateLastIssueLink(lastIssue) {
   if (!modalElements) return;
   const link = modalElements.lastIssueLink;
   if (lastIssue?.html_url && lastIssue?.number) {
-    link.style.display = 'inline-flex';
+    link.style.display = "inline-flex";
     link.href = lastIssue.html_url;
     link.textContent = `#${lastIssue.number}`;
   } else {
-    link.style.display = 'none';
-    link.href = '#';
+    link.style.display = "none";
+    link.href = "#";
   }
 }
 
-function showToast(message, type = 'info', link) {
-  let toast = document.getElementById('chrome-issue-reporter-toast');
+function showToast(message, type = "info", link) {
+  let toast = document.getElementById("chrome-issue-reporter-toast");
   if (!toast) {
-    toast = document.createElement('div');
-    toast.id = 'chrome-issue-reporter-toast';
+    toast = document.createElement("div");
+    toast.id = "chrome-issue-reporter-toast";
     document.body.appendChild(toast);
   }
 
-  toast.className = '';
-  toast.classList.add('cir-toast', 'is-visible');
-  if (type !== 'info') {
+  toast.className = "";
+  toast.classList.add("cir-toast", "is-visible");
+  if (type !== "info") {
     toast.classList.add(type);
   }
 
   toast.textContent = message;
   if (link?.href) {
-    const anchor = document.createElement('a');
+    const anchor = document.createElement("a");
     anchor.href = link.href;
-    anchor.textContent = link.label || 'Open';
-    anchor.target = '_blank';
-    anchor.rel = 'noreferrer noopener';
-    anchor.style.marginLeft = '8px';
+    anchor.textContent = link.label || "Open";
+    anchor.target = "_blank";
+    anchor.rel = "noreferrer noopener";
+    anchor.style.marginLeft = "8px";
     toast.appendChild(anchor);
   }
 
   clearTimeout(toastTimeoutId);
   toastTimeoutId = setTimeout(() => {
-    toast.classList.remove('is-visible');
+    toast.classList.remove("is-visible");
   }, 4000);
 }
 
-function generateTitleFromDescription(description, fallback = '') {
+function generateTitleFromDescription(description, fallback = "") {
   if (!description) {
-    return fallback || 'Change requested on page';
+    return fallback || "Change requested on page";
   }
   const firstLine = description.trim().split(/\n+/)[0];
   if (!firstLine) {
-    return fallback || 'Change requested on page';
+    return fallback || "Change requested on page";
   }
   let candidate = sanitizeForTitle(firstLine);
-  candidate = candidate.replace(/[.!?]+$/g, '').trim();
+  candidate = candidate.replace(/[.!?]+$/g, "").trim();
 
   if (candidate.length > MAX_AUTO_TITLE_LENGTH) {
     candidate = candidate.slice(0, MAX_AUTO_TITLE_LENGTH).trim();
@@ -1418,12 +1562,12 @@ function generateTitleFromDescription(description, fallback = '') {
     candidate = candidate.charAt(0).toUpperCase() + candidate.slice(1);
   }
 
-  return candidate || fallback || 'Change requested on page';
+  return candidate || fallback || "Change requested on page";
 }
 
 function buildDefaultTitle(context) {
   if (!context) {
-    return 'Change requested on page';
+    return "Change requested on page";
   }
 
   if (context.elementDescription) {
@@ -1433,98 +1577,107 @@ function buildDefaultTitle(context) {
     const idMatch = desc.match(/#([\w-]+)/);
     const classMatch = desc.match(/\.([\w-]+)/);
 
-    const tag = tagMatch ? sanitizeForTitle(tagMatch[1]) : '';
-    const text = textMatch ? sanitizeForTitle(textMatch[1]) : '';
-    const id = idMatch ? sanitizeForTitle(idMatch[1]) : '';
-    const className = classMatch ? sanitizeForTitle(classMatch[1]) : '';
+    const tag = tagMatch ? sanitizeForTitle(tagMatch[1]) : "";
+    const text = textMatch ? sanitizeForTitle(textMatch[1]) : "";
+    const id = idMatch ? sanitizeForTitle(idMatch[1]) : "";
+    const className = classMatch ? sanitizeForTitle(classMatch[1]) : "";
 
     const titleParts = [];
 
-    if (tag === 'button') {
-      titleParts.push('Change requested in button');
-    } else if (tag === 'a') {
-      titleParts.push('Change requested in link');
-    } else if (tag === 'img') {
-      titleParts.push('Change requested in image');
-    } else if (['input', 'textarea', 'select'].includes(tag)) {
-      titleParts.push('Change requested in form field');
-    } else if (['h1', 'h2', 'h3', 'h4', 'h5', 'h6'].includes(tag)) {
-      titleParts.push('Change requested in heading');
-    } else if (tag === 'nav') {
-      titleParts.push('Change requested in navigation');
-    } else if (tag === 'header') {
-      titleParts.push('Change requested in header');
-    } else if (tag === 'footer') {
-      titleParts.push('Change requested in footer');
-    } else if (tag === 'section' || tag === 'div') {
+    if (tag === "button") {
+      titleParts.push("Change requested in button");
+    } else if (tag === "a") {
+      titleParts.push("Change requested in link");
+    } else if (tag === "img") {
+      titleParts.push("Change requested in image");
+    } else if (["input", "textarea", "select"].includes(tag)) {
+      titleParts.push("Change requested in form field");
+    } else if (["h1", "h2", "h3", "h4", "h5", "h6"].includes(tag)) {
+      titleParts.push("Change requested in heading");
+    } else if (tag === "nav") {
+      titleParts.push("Change requested in navigation");
+    } else if (tag === "header") {
+      titleParts.push("Change requested in header");
+    } else if (tag === "footer") {
+      titleParts.push("Change requested in footer");
+    } else if (tag === "section" || tag === "div") {
       if (className) {
-        if (className.includes('hero') || className.includes('banner')) {
-          titleParts.push('Change requested in the hero of the page');
-        } else if (className.includes('nav') || className.includes('menu')) {
-          titleParts.push('Change requested in navigation');
-        } else if (className.includes('card')) {
-          titleParts.push('Change requested in card');
-        } else if (className.includes('modal') || className.includes('dialog')) {
-          titleParts.push('Change requested in modal');
-        } else if (className.includes('sidebar')) {
-          titleParts.push('Change requested in sidebar');
+        if (className.includes("hero") || className.includes("banner")) {
+          titleParts.push("Change requested in the hero of the page");
+        } else if (className.includes("nav") || className.includes("menu")) {
+          titleParts.push("Change requested in navigation");
+        } else if (className.includes("card")) {
+          titleParts.push("Change requested in card");
+        } else if (
+          className.includes("modal") ||
+          className.includes("dialog")
+        ) {
+          titleParts.push("Change requested in modal");
+        } else if (className.includes("sidebar")) {
+          titleParts.push("Change requested in sidebar");
         } else {
           titleParts.push(`Change requested in ${className} section`);
         }
       } else if (id) {
-        if (id.includes('hero') || id.includes('banner')) {
-          titleParts.push('Change requested in the hero of the page');
+        if (id.includes("hero") || id.includes("banner")) {
+          titleParts.push("Change requested in the hero of the page");
         } else {
           titleParts.push(`Change requested in ${id}`);
         }
       } else {
-        titleParts.push('Change requested in section');
+        titleParts.push("Change requested in section");
       }
     } else if (tag) {
       titleParts.push(`Change requested in ${tag}`);
     } else {
-      titleParts.push('Change requested on page');
+      titleParts.push("Change requested on page");
     }
 
     if (text && text.length < 40) {
       titleParts.push(`(${text})`);
     }
 
-    return sanitizeForTitle(titleParts.join(' '));
+    return sanitizeForTitle(titleParts.join(" "));
   }
 
   if (context.title) {
     return `Change requested: ${sanitizeForTitle(context.title)}`;
   }
 
-  return 'Change requested on page';
+  return "Change requested on page";
 }
 
 function sanitizeForTitle(value) {
   if (!value) {
-    return '';
+    return "";
   }
   let sanitized = String(value);
   let prevLength;
   do {
     prevLength = sanitized.length;
-    sanitized = sanitized.replace(/<[^>]*>/g, '');
+    sanitized = sanitized.replace(/<[^>]*>/g, "");
   } while (sanitized.length !== prevLength);
 
-  const dangerousSchemes = [ /javascript:/gi, /data:/gi, /vbscript:/gi, /file:/gi, /about:/gi ];
-  dangerousSchemes.forEach(regex => {
+  const dangerousSchemes = [
+    /javascript:/gi,
+    /data:/gi,
+    /vbscript:/gi,
+    /file:/gi,
+    /about:/gi,
+  ];
+  dangerousSchemes.forEach((regex) => {
     do {
       prevLength = sanitized.length;
-      sanitized = sanitized.replace(regex, '');
+      sanitized = sanitized.replace(regex, "");
     } while (sanitized.length !== prevLength);
   });
 
   do {
     prevLength = sanitized.length;
-    sanitized = sanitized.replace(/on\w+=/gi, '');
+    sanitized = sanitized.replace(/on\w+=/gi, "");
   } while (sanitized.length !== prevLength);
 
-  sanitized = sanitized.replace(/\s+/g, ' ').trim();
+  sanitized = sanitized.replace(/\s+/g, " ").trim();
 
   if (sanitized.length > MAX_AUTO_TITLE_LENGTH) {
     sanitized = sanitized.substring(0, MAX_AUTO_TITLE_LENGTH);
@@ -1535,7 +1688,7 @@ function sanitizeForTitle(value) {
 
 function formatContextPreview(context) {
   if (!context) {
-    return '';
+    return "";
   }
   const parts = [];
 
@@ -1548,27 +1701,31 @@ function formatContextPreview(context) {
   }
 
   if (context.selectedText) {
-    parts.push('\nSelection:\n' + truncatePreview(context.selectedText));
+    parts.push("\nSelection:\n" + truncatePreview(context.selectedText));
   }
   if (context.htmlSnippet) {
-    parts.push('\nHTML snippet captured.');
+    parts.push("\nHTML snippet captured.");
   }
   if (context.scriptSnippet) {
-    parts.push('\nJS snippet captured.');
+    parts.push("\nJS snippet captured.");
   }
   if (context.jsError) {
     parts.push(`\nLast error: ${context.jsError.message}`);
   }
-  if (context.consoleLogs && Array.isArray(context.consoleLogs) && context.consoleLogs.length > 0) {
+  if (
+    context.consoleLogs &&
+    Array.isArray(context.consoleLogs) &&
+    context.consoleLogs.length > 0
+  ) {
     parts.push(`\n${context.consoleLogs.length} console log(s) captured.`);
   }
 
-  return parts.join('\n');
+  return parts.join("\n");
 }
 
 function truncatePreview(value, limit = 200) {
   if (!value) {
-    return '';
+    return "";
   }
   return value.length > limit ? `${value.slice(0, limit)}…` : value;
 }
