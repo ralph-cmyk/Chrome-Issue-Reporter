@@ -10,7 +10,8 @@
     "format:check": "npx -y prettier@3.3.3 --check \"extension/**/*.{js,html,json}\" \"scripts/**/*.js\" \".github/workflows/*.yml\"",
     "build-update": "node scripts/build-update.js",
     "generate-update-xml": "node scripts/update-manifest.js",
-    "setup-cloudflare": "node scripts/setup-cloudflare.js"
+    "setup-cloudflare": "node scripts/setup-cloudflare.js",
+    "release:r2": "bash scripts/release-r2.sh"
   },
   "repository": {
     "type": "git",

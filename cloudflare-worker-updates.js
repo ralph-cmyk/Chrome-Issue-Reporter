@@ -72,63 +72,9 @@ export default {
         return await serveExtensionZip(env, filename);
       }
 
-      // Route: / - Info page
+      // Route: / - Landing page
       if (url.pathname === '/') {
-        return new Response(
-          `
-          <!DOCTYPE html>
-          <html>
-          <head>
-            <title>Chrome Extension Updates</title>
-            <style>
-              body {
-                font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
-                max-width: 800px;
-                margin: 40px auto;
-                padding: 0 20px;
-                line-height: 1.6;
-              }
-              h1 { color: #667eea; }
-              .endpoint { 
-                background: #f5f5f5; 
-                padding: 10px; 
-                border-radius: 5px;
-                margin: 10px 0;
-                font-family: monospace;
-              }
-              .status { color: #28a745; font-weight: bold; }
-            </style>
-          </head>
-          <body>
-            <h1>🚀 Chrome Extension Update Server</h1>
-            <p class="status">✅ Server is running</p>
-            
-            <h2>Available Endpoints:</h2>
-            <div class="endpoint">GET /update.xml - Extension update manifest</div>
-            <div class="endpoint">GET /extensions/[filename].zip - Extension packages</div>
-            <div class="endpoint">POST /upload - Screenshot upload (multipart/form-data, field: screenshot)</div>
-            <div class="endpoint">GET /screenshots/[name].jpg - Serve uploaded screenshots</div>
-            
-            <h2>How It Works:</h2>
-            <p>This server provides automatic updates for the Chrome extension.</p>
-            <ul>
-              <li>Chrome checks <code>/update.xml</code> periodically</li>
-              <li>If a new version is available, Chrome downloads it from <code>/extensions/</code></li>
-              <li>Updates are installed automatically in the background</li>
-            </ul>
-            <p>It can also accept screenshot uploads and serve them back without making your R2 bucket public.</p>
-            
-            <p><small>Powered by Cloudflare Workers + R2</small></p>
-          </body>
-          </html>
-          `,
-          {
-            headers: {
-              'Content-Type': 'text/html; charset=utf-8',
-              'Cache-Control': 'no-cache',
-            },
-          }
-        );
+        return await renderLanding(env);
       }
 
       // 404 for other routes
@@ -260,6 +206,258 @@ async function serveLatestZip(env) {
       'Cache-Control': 'public, max-age=600', // short cache to reflect swaps
     },
   }));
+}
+
+async function renderLanding(env) {
+  const meta = await getUpdateMeta(env);
+  const version = meta?.version || 'Unknown';
+  const codebase = meta?.codebase || '/extensions/chrome-issue-reporter-latest.zip';
+  const features = [
+    'Capture console logs, HTML context, and screenshots',
+    'GitHub OAuth device flow with repo picker',
+    'Context menu + popup workflow for quick issue filing',
+    'Automatic updates via Cloudflare Worker + R2',
+  ];
+  const changes = [
+    'Added friendly /download latest ZIP endpoint',
+    'Clarified auto-update docs and worker wiring',
+    'Packaged build v21.0.1 with update_url set',
+  ];
+
+  const featureList = features.map((item) => `<li>${escapeHtml(item)}</li>`).join('');
+  const changeList = changes.map((item) => `<li>${escapeHtml(item)}</li>`).join('');
+
+  const html = `
+    <!DOCTYPE html>
+    <html>
+    <head>
+      <meta charset="utf-8" />
+      <title>Chrome Issue Reporter - Download</title>
+      <meta name="viewport" content="width=device-width, initial-scale=1" />
+      <style>
+        :root {
+          color-scheme: light dark;
+          --bg: #0f172a;
+          --panel: #111827;
+          --text: #e5e7eb;
+          --muted: #94a3b8;
+          --accent: #7c3aed;
+          --accent-2: #22d3ee;
+          --border: #1f2937;
+        }
+        @media (prefers-color-scheme: light) {
+          :root {
+            --bg: #f8fafc;
+            --panel: #ffffff;
+            --text: #0f172a;
+            --muted: #475569;
+            --accent: #6d28d9;
+            --accent-2: #0ea5e9;
+            --border: #e2e8f0;
+          }
+        }
+        body {
+          margin: 0;
+          background: radial-gradient(circle at 20% 20%, rgba(124, 58, 237, 0.08), transparent 25%),
+                      radial-gradient(circle at 80% 0%, rgba(14, 165, 233, 0.08), transparent 22%),
+                      var(--bg);
+          color: var(--text);
+          font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+          min-height: 100vh;
+        }
+        .container {
+          max-width: 960px;
+          margin: 48px auto;
+          padding: 0 20px 64px;
+        }
+        .hero {
+          background: linear-gradient(135deg, rgba(124, 58, 237, 0.14), rgba(34, 211, 238, 0.12));
+          border: 1px solid var(--border);
+          border-radius: 16px;
+          padding: 28px;
+          box-shadow: 0 20px 70px rgba(0, 0, 0, 0.25);
+        }
+        h1 {
+          margin: 0 0 6px;
+          font-size: 26px;
+          letter-spacing: -0.02em;
+        }
+        .sub {
+          margin: 0;
+          color: var(--muted);
+          font-size: 15px;
+        }
+        .meta {
+          margin-top: 16px;
+          display: flex;
+          gap: 12px;
+          flex-wrap: wrap;
+        }
+        .pill {
+          background: rgba(255, 255, 255, 0.06);
+          border: 1px solid var(--border);
+          border-radius: 999px;
+          padding: 6px 12px;
+          font-size: 13px;
+          color: var(--muted);
+        }
+        .actions {
+          margin-top: 24px;
+          display: flex;
+          gap: 12px;
+          flex-wrap: wrap;
+        }
+        .btn {
+          display: inline-flex;
+          align-items: center;
+          gap: 10px;
+          padding: 12px 18px;
+          border-radius: 12px;
+          border: 1px solid transparent;
+          text-decoration: none;
+          font-weight: 600;
+          letter-spacing: -0.01em;
+          color: #fff;
+          background: linear-gradient(135deg, var(--accent), var(--accent-2));
+          box-shadow: 0 12px 30px rgba(124, 58, 237, 0.25);
+          transition: transform 150ms ease, box-shadow 150ms ease;
+        }
+        .btn:hover {
+          transform: translateY(-1px);
+          box-shadow: 0 14px 34px rgba(124, 58, 237, 0.32);
+        }
+        .btn.secondary {
+          background: transparent;
+          color: var(--text);
+          border-color: var(--border);
+          box-shadow: none;
+        }
+        .grid {
+          margin-top: 28px;
+          display: grid;
+          grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+          gap: 16px;
+        }
+        .card {
+          background: var(--panel);
+          border: 1px solid var(--border);
+          border-radius: 14px;
+          padding: 18px 18px 16px;
+          box-shadow: 0 12px 30px rgba(0, 0, 0, 0.08);
+        }
+        .card h3 {
+          margin: 0 0 10px;
+          font-size: 16px;
+        }
+        ul {
+          margin: 0;
+          padding-left: 18px;
+          color: var(--muted);
+          line-height: 1.55;
+          font-size: 14px;
+        }
+        code {
+          background: rgba(255, 255, 255, 0.06);
+          border-radius: 6px;
+          padding: 2px 6px;
+          font-size: 13px;
+        }
+        .footer {
+          margin-top: 26px;
+          color: var(--muted);
+          font-size: 13px;
+        }
+        @media (max-width: 640px) {
+          .hero { padding: 22px; }
+          h1 { font-size: 22px; }
+          .btn { width: 100%; justify-content: center; }
+          .actions { flex-direction: column; }
+        }
+      </style>
+    </head>
+    <body>
+      <div class="container">
+        <div class="hero">
+          <h1>Chrome Issue Reporter</h1>
+          <p class="sub">Capture page context and ship GitHub issues fast.</p>
+          <div class="meta">
+            <span class="pill">Latest version: ${escapeHtml(version)}</span>
+            <span class="pill">Auto-updates enabled</span>
+            <span class="pill">Update URL: /update.xml</span>
+          </div>
+          <div class="actions">
+            <a class="btn" href="/download">⬇️ Download & Install</a>
+            <a class="btn secondary" href="${escapeAttr(codebase)}">Direct ZIP (${escapeHtml(version)})</a>
+          </div>
+        </div>
+
+        <div class="grid">
+          <div class="card">
+            <h3>What you get</h3>
+            <ul>${featureList}</ul>
+          </div>
+          <div class="card">
+            <h3>Recent changes</h3>
+            <ul>${changeList}</ul>
+          </div>
+          <div class="card">
+            <h3>How updates work</h3>
+            <ul>
+              <li>Install once via the ZIP (drag-drop in chrome://extensions).</li>
+              <li>Chrome fetches <code>/update.xml</code> every few hours.</li>
+              <li>New ZIPs are served from <code>/extensions/</code> (and /download).</li>
+            </ul>
+          </div>
+        </div>
+
+        <p class="footer">
+          Served by Cloudflare Workers + R2 • Update manifest: /update.xml • Latest ZIP: /download
+        </p>
+      </div>
+    </body>
+    </html>
+  `;
+
+  return new Response(html, {
+    headers: {
+      'Content-Type': 'text/html; charset=utf-8',
+      'Cache-Control': 'no-cache',
+    },
+  });
+}
+
+async function getUpdateMeta(env) {
+  try {
+    const object = await env.UPDATES_BUCKET.get('update.xml');
+    if (!object) return null;
+    const xml = await new Response(object.body).text();
+    return parseUpdateXml(xml);
+  } catch (err) {
+    console.error('Failed to read update.xml for landing:', err);
+    return null;
+  }
+}
+
+function parseUpdateXml(xml) {
+  const versionMatch = xml.match(/version=['"]([^'"]+)['"]/);
+  const codebaseMatch = xml.match(/codebase=['"]([^'"]+)['"]/);
+  return {
+    version: versionMatch ? versionMatch[1] : undefined,
+    codebase: codebaseMatch ? codebaseMatch[1] : undefined,
+  };
+}
+
+function escapeHtml(value) {
+  return String(value || '')
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#39;');
+}
+
+function escapeAttr(value) {
+  return escapeHtml(value).replace(/"/g, '&quot;');
 }
 
 function withCors(response) {

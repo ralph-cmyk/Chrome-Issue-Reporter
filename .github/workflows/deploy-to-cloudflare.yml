@@ -77,6 +77,18 @@ jobs:
           AWS_ACCESS_KEY_ID: ${{ secrets.R2_ACCESS_KEY_ID }}
           AWS_SECRET_ACCESS_KEY: ${{ secrets.R2_SECRET_ACCESS_KEY }}
 
+      - name: Upload latest alias ZIP to Cloudflare R2
+        run: |
+          aws s3 cp \
+            chrome-issue-reporter-v${{ steps.get-version.outputs.version }}.zip \
+            s3://${{ secrets.R2_BUCKET_NAME }}/extensions/chrome-issue-reporter-latest.zip \
+            --endpoint-url https://${{ secrets.CF_ACCOUNT_ID }}.r2.cloudflarestorage.com \
+            --content-type application/zip \
+            --region auto
+        env:
+          AWS_ACCESS_KEY_ID: ${{ secrets.R2_ACCESS_KEY_ID }}
+          AWS_SECRET_ACCESS_KEY: ${{ secrets.R2_SECRET_ACCESS_KEY }}
+
       - name: Upload update.xml to Cloudflare R2
         run: |
           aws s3 cp \
