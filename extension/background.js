@@ -104,27 +104,21 @@ chrome.runtime.onStartup.addListener(async () => {
 });
 
 chrome.action.onClicked.addListener(async (tab) => {
-  if (!tab?.id) {
-    return;
-  }
-
+  if (!tab?.id) return;
   try {
     const ready = await ensureReadyForIssueCreation(tab);
-    if (!ready) {
-      return;
-    }
-    // Unified flow: open the issue modal on the current page (with screenshot),
-    // not live select. Live select remains accessible from popup/context menu.
-    await startPageIssueFlowForTab(tab);
+    if (!ready) return;
+    await ensureContentScript(tab.id);
+    await chrome.tabs.sendMessage(tab.id, { type: "startIssueFlow" });
   } catch (error) {
-    console.error("Failed to start issue flow from action click", error);
+    console.error("Failed to start live select from action click", error);
     try {
       await chrome.tabs.sendMessage(tab.id, {
         type: "issueFlowError",
-        message: error.message || "Unable to start issue capture on this page.",
+        message: error.message || "Unable to start live select on this page.",
       });
     } catch {
-      // No-op if tab cannot be messaged
+      // Tab might not be messageable; ignore.
     }
   }
 });
