@@ -61,6 +61,11 @@ export default {
         return await serveUpdateXml(env);
       }
 
+      // Route: /download - Friendly latest ZIP download
+      if (url.pathname === '/download') {
+        return await serveLatestZip(env);
+      }
+
       // Route: /extensions/* - Extension ZIP files
       if (url.pathname.startsWith('/extensions/')) {
         const filename = url.pathname.replace('/extensions/', '');
@@ -230,6 +235,31 @@ async function serveExtensionZip(env, filename) {
       },
     }));
   }
+}
+
+async function serveLatestZip(env) {
+  // Convenience: fetch latest ZIP from a well-known key and serve it.
+  // Default key: extensions/chrome-issue-reporter-latest.zip
+  const key = env.LATEST_ZIP_KEY || 'extensions/chrome-issue-reporter-latest.zip';
+
+  if (!key.endsWith('.zip') || key.includes('..') || key.startsWith('/')) {
+    return withCors(new Response('Invalid latest ZIP key', { status: 500 }));
+  }
+
+  const object = await env.UPDATES_BUCKET.get(key);
+  if (!object) {
+    return withCors(new Response('Latest ZIP not found', { status: 404 }));
+  }
+
+  const filename = key.split('/').pop() || 'extension.zip';
+
+  return withCors(new Response(object.body, {
+    headers: {
+      'Content-Type': 'application/zip',
+      'Content-Disposition': `attachment; filename="${filename}"`,
+      'Cache-Control': 'public, max-age=600', // short cache to reflect swaps
+    },
+  }));
 }
 
 function withCors(response) {

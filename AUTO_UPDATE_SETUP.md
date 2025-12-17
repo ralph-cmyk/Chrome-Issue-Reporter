@@ -10,6 +10,11 @@ The auto-update system consists of:
 3. **GitHub Actions** - Automatically builds and uploads new versions
 4. **Chrome Extension** - Checks for updates automatically
 
+### What this flow does (and doesn’t)
+- **No auto-update for unpacked installs.** Users who click “Load unpacked” will never auto-update.
+- **Initial install must use a ZIP/CRX that has `update_url` set to your Worker.** After that first install, Chrome pulls updates from the Worker-hosted `update.xml` + ZIP.
+- **Chrome cannot install directly from the Worker URL.** The Worker only serves updates; distribute the ZIP once for the first install.
+
 ## 📋 Prerequisites
 
 - Cloudflare account (free tier works fine)
@@ -83,6 +88,8 @@ Add/Update these secrets:
 5. **R2_ACCESS_KEY_ID** and **R2_SECRET_ACCESS_KEY** (if not already set)
    - Create in: Cloudflare Dashboard → R2 → Manage R2 API Tokens
 
+> Note: From this environment, `gh secret list` may return 403 (“Resource not accessible by integration”), so validate secrets in the GitHub UI instead of via CLI here.
+
 ### Step 4: Test the Setup
 
 1. **Trigger the GitHub Action:**
@@ -135,6 +142,50 @@ Add/Update these secrets:
    - Enable "Developer mode"
    - Click "Update" button at the top
    - Your extension should update to 21.0.1!
+
+### Fast path for new users (minimal steps)
+1. Build and zip the extension: `npm run package` (or `zip -r dist.zip extension`).
+2. Generate `update.xml` pointing to the Worker ZIP URL (e.g., `npm run build-update`).
+3. Upload the ZIP (and `update.xml` if not generated inline) to R2 so the Worker can serve them.
+4. Install the ZIP locally once via `chrome://extensions/` (drag-and-drop the ZIP). “Load unpacked” is **not** enough because it lacks `update_url`.
+5. For each release: bump version in `extension/manifest.json`, rebuild ZIP, update `update.xml`, upload, and redeploy Worker.
+
+### Minimal `update.xml` template
+Replace placeholders and host it via the Worker:
+
+```xml
+<?xml version="1.0" encoding="UTF-8"?>
+<gupdate xmlns="http://www.google.com/update2/response" protocol="2.0">
+  <app appid="YOUR_EXTENSION_ID">
+    <updatecheck
+      codebase="https://<your-worker>.workers.dev/extensions/chrome-issue-reporter-v21.0.0.zip"
+      version="21.0.0" />
+  </app>
+</gupdate>
+```
+
+### Minimal Worker URL wiring (real URLs)
+- `update_url` in `extension/manifest.json`: `https://chrome-issue-reporter-updates.super-extreme.workers.dev/update.xml`
+- `codebase` in `update.xml`: `https://chrome-issue-reporter-updates.super-extreme.workers.dev/extensions/<your-zip>.zip`
+- Keep the XML lightly cached (or no-cache) and the ZIP with a longer cache lifetime.
+- Optional friendly download for users: `https://chrome-issue-reporter-updates.super-extreme.workers.dev/download` (Worker serves the latest ZIP from R2).
+
+### Easiest path for non-technical users (no Web Store)
+- Give them one link: `https://<your-worker>.workers.dev/extensions/chrome-issue-reporter-latest.zip`
+- They open `chrome://extensions/`, toggle **Developer mode** (top right), and drag-drop the ZIP. That’s all. “Load unpacked” must not be used because it skips `update_url`.
+- After that first drag-drop, all updates are automatic via your Worker-hosted `update.xml` + ZIP. They never need to repeat the install.
+
+### One-shot install for new users (copy/paste)
+```bash
+# Build and package
+npm run package
+# Generate update.xml (uses scripts/build-update.js)
+npm run build-update -- --extension-id=YOUR_EXTENSION_ID --update-url=https://<your-worker>.workers.dev
+# Upload artifacts to R2 (example paths; adjust bucket and filenames)
+wrangler r2 object put chrome-issue-reporter/update.xml --file=update.xml
+wrangler r2 object put chrome-issue-reporter/extensions/chrome-issue-reporter-v21.0.0.zip --file=dist/chrome-issue-reporter-v21.0.0.zip
+```
+Then drag the ZIP into `chrome://extensions/` (Developer mode). Future updates are automatic via the Worker.
 
 ## 🎉 How It Works
 
