@@ -387,6 +387,7 @@ async function renderLanding(env) {
           </div>
           <div class="actions">
             <a class="btn" href="${escapeAttr(codebase)}">⬇️ Download & Install</a>
+            <a class="btn secondary" href="${escapeAttr(codebase)}">Manual update (latest ZIP)</a>
             <a class="btn secondary" href="/update.xml">View update.xml</a>
           </div>
         </div>
