@@ -61,9 +61,9 @@ export default {
         return await serveUpdateXml(env);
       }
 
-      // Route: /download - Friendly latest ZIP download
+      // Route: /download - now shows landing (no auto-download)
       if (url.pathname === '/download') {
-        return await serveLatestZip(env);
+        return await renderLanding(env);
       }
 
       // Route: /extensions/* - Extension ZIP files
@@ -386,8 +386,8 @@ async function renderLanding(env) {
             <span class="pill">Update URL: /update.xml</span>
           </div>
           <div class="actions">
-            <a class="btn" href="/download">⬇️ Download & Install</a>
-            <a class="btn secondary" href="${escapeAttr(codebase)}">Direct ZIP (${escapeHtml(version)})</a>
+            <a class="btn" href="${escapeAttr(codebase)}">⬇️ Download & Install</a>
+            <a class="btn secondary" href="/update.xml">View update.xml</a>
           </div>
         </div>
 
